@@ -1,0 +1,151 @@
+/* FONTS */
+@import url('https://fonts.googleapis.com/css2?family=Asap+Condensed:ital,wght@0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Nunito:ital,wght@0,200..1000;1,200..1000&display=swap');
+
+/* MAIN */
+main,
+p,
+span,
+button,
+a,
+ul,
+li,
+select,
+input {
+  font-family: 'Nunito', arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-style: normal !important;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: 'Nunito', arial, sans-serif !important;
+  font-weight: 500 !important;
+  font-style: normal !important;
+}
+
+.fst-condensed {
+  font-family: 'Asap Condensed', arial, sans-serif !important;
+}
+
+.text-xs {
+  font-size: 0.75rem; /* 12px */
+  line-height: 1rem; /* 16px */
+}
+
+.text-ss {
+  font-size: calc(13.125rem / 16); /* 13.125px */
+  line-height: 1.125rem; /* 18px */
+}
+
+.text-hover {
+  text-decoration-line: none;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.cursor-grab {
+  cursor: grab;
+}
+
+.cursor-grab:active {
+  cursor: grabbing;
+}
+
+.cursor-default {
+  cursor: default;
+}
+
+@media (max-width: 992px) {
+  .sidebar,
+  .desktop {
+    display: none;
+  }
+  .topbar {
+    backdrop-filter: blur(6px);
+    background-color: #f7f7f7bb;
+  }
+  .content {
+    width: 100%;
+  }
+  .text-hover:hover {
+    text-decoration-line: none;
+  }
+  .tree {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 0;
+  }
+  .about-search {
+    width: 100%;
+  }
+}
+@media (min-width: 992px) {
+  .sidebar {
+    width: 12%;
+    min-width: 200px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+  }
+  .topbar,
+  .mobile {
+    display: none;
+  }
+  .content {
+    width: 88%;
+    min-height: 100vh;
+    margin-left: max(12%, 200px);
+  }
+  .text-hover:hover {
+    text-decoration-line: underline;
+  }
+}
+@media (min-width: 992px) and (max-width: 1200px) {
+}
+@media (min-width: 1200px) {
+}
+
+.btn-xs {
+  padding: 0.125rem 0.6rem !important;
+  font-size: 0.7rem !important;
+  line-height: 1.2 !important;
+  border-radius: 0.25rem !important;
+}
+
+.btn-xs > .bi {
+  font-size: 0.7rem;
+  vertical-align: -0.125em;
+}
+
+.logo {
+  height: 33px;
+  /* filter: drop-shadow(0 0 5px rgba(0, 150, 255, 0.7)); */
+}
+
+.nav-hover:hover {
+  background-color: #ffffffbb;
+}
+
+.bg-blur {
+  z-index: 99999;
+  backdrop-filter: blur(6px);
+  background-color: #ffffffbb;
+}
+
+.table-rounded thead tr:first-child th:first-child {
+  border-top-left-radius: 0.375rem;
+}
+
+.table-rounded thead tr:first-child th:last-child {
+  border-top-right-radius: 0.375rem;
+}

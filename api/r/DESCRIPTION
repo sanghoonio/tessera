@@ -1,0 +1,13 @@
+Package: tessera-r-server
+Type: Package
+Version: 0.1.0
+Title: Tessera R Server
+Description: An R-based WebSocket server for Mosaic vgplots.
+Depends:
+    R (>= 4.0.0)
+Imports:
+    httpuv,
+    duckdb,
+    jsonlite,
+    digest,
+    cachem

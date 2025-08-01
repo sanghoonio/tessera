@@ -1,0 +1,14 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+package-lock.json
+node_modules
+dist
+dist-ssr
+*.local
+*.venv
+*__pycache__
+
+.DS_Store
