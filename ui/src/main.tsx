@@ -10,6 +10,8 @@ import 'bootstrap-icons/font/bootstrap-icons.css';
 
 import Navbar from './components/Navbar';
 import Details from './components/pages/Details';
+import Summary from './components/pages/Summary';
+import Config from './components/pages/Config';
 
 const queryClient = new QueryClient();
 
@@ -25,6 +27,8 @@ function Main() {
                 <Routes>
                   <Route path='/' element={<Details />} />
                   <Route path='/details' element={<Details />} />
+                  <Route path='/summary' element={<Summary />} />
+                  <Route path='/config' element={<Config />} />
                 </Routes>
               </div>
             </div>

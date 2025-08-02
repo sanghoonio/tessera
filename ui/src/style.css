@@ -120,6 +120,8 @@ h6 {
   font-size: 0.7rem !important;
   line-height: 1.2 !important;
   border-radius: 0.25rem !important;
+  margin-top: -0.05rem;
+  margin-bottom: -0.05rem;
 }
 
 .btn-xs > .bi {

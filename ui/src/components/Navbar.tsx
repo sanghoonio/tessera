@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 type NavLinkProps = {
@@ -28,7 +29,7 @@ const NavLink = (props: NavLinkProps) => {
         className={`fst-condensed text-decoration-none stretched-link text-hover ${currentPage === page || currentPage.startsWith(`${page}/`) ? 'fw-light' : 'fw-lighter text-black-50'}`}
         style={
           currentPage === page || currentPage.startsWith(`${page}/`)
-            ? { color: '#008066' }
+            ? { color: 'rosybrown' }
             : {}
         }
         to={page}
@@ -41,18 +42,26 @@ const NavLink = (props: NavLinkProps) => {
 
 function Navbar() {
   const location = useLocation().pathname.substring(1) || 'details';
+  const [titleText, setTitleText] = useState('Tessera');
 
   return (
     <>
       <div className='flex-0 sidebar border-end bg-body-secondary px-2'>
         <div className='row page-width sticky-top'>
           <div className='col-12 p-4'>
-            <Link to='' className='text-decoration-none text-dark'>
-              {/* <img src={logo} alt='Refgenie Logo' className='logo d-block mx-auto' /> */}
-              <h5 className='fst-condensed mt-2 fw-light text-center'>Tessera</h5>
-            </Link>
+            <div className='d-flex'>
+              <Link to='' className='text-decoration-none text-dark mx-auto'>
+                <h5 
+                  className='fst-condensed mt-2 fw-light m-0' 
+                  onMouseEnter={() => setTitleText('Tes[seurat]')}
+                  onMouseLeave={() => setTitleText('Tessera')}
+                >
+                  {titleText}
+                </h5>
+              </Link>
+            </div>
             <div className='col-12 text-start'>
-              <p className='fst-condensed mt-4 mb-0'>Home</p>
+              <p className='fst-condensed mt-4 mb-0'>Views</p>
               <div className=''>
                 <NavLink
                   page={'details'}
@@ -116,7 +125,13 @@ function Navbar() {
         <div className='row page-width'>
           <div className='col-12 pt-4 px-4 pb-3'>
             <Link to='' className='text-decoration-none text-dark'>
-              {/* <img src={logo} alt='Refgenie Logo' className='logo' /> */}
+              <h5 
+                className='fst-condensed mt-2 fw-light text-center' 
+                onMouseEnter={() => setTitleText('Tes[seurat]')}
+                onMouseLeave={() => setTitleText('Tessera')}
+              >
+                {titleText}
+              </h5>
             </Link>
             <span
               className='d-inline float-end cursor-pointer dropdown-hover'
