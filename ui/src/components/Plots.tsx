@@ -1,41 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
+import Select from 'react-select'
 
 import * as vg from '@uwdata/vgplot';
-// import * as sql from '@uwdata/mosaic-sql';
 import { makeClient } from "@uwdata/mosaic-core";
-import { Query, count, avg } from "@uwdata/mosaic-sql";
+import { Query, count, avg, sum } from "@uwdata/mosaic-sql";
+
+import { createUmapCategories, bootstrapSelectStyles } from '../utils';
 
 const Plots = () => {
-  const legendLabels = {
-    'cluster': 'Cluster',
-    'nFeature_RNA': 'nFeature',
-    'nCount_RNA': 'nUMI', 
-    'percent_mt': 'Percent MT',
-  };
-
-  const geneLabels = {
-    'SCGB1A1': 'SCGB1A1 (Secretoglobin)',
-    'IGLC1': 'IGLC1 (Immunoglobulin)',
-    'IGHG1': 'IGHG1 (Immunoglobulin)',
-    'IGHD': 'IGHD (Immunoglobulin)',
-    'SCGB3A2': 'SCGB3A2 (Secretoglobin)',
-    'SCGB3A1': 'SCGB3A1 (Secretoglobin)',
-    'IGHG3': 'IGHG3 (Immunoglobulin)',
-    'IGHA1': 'IGHA1 (Immunoglobulin)',
-    'BPIFB1': 'BPIFB1 (Antimicrobial)',
-    'C9orf24': 'C9orf24',
-    'IGKC': 'IGKC (Immunoglobulin)',
-    'CXCL8': 'CXCL8 (IL-8)',
-    'TPPP3': 'TPPP3 (Tubulin)',
-    'COL3A1': 'COL3A1 (Collagen)',
-    'RSPH1': 'RSPH1 (Radial Spoke)',
-    'COL1A1': 'COL1A1 (Collagen)',
-    'IL6': 'IL6 (Interleukin-6)',
-    'MSMB': 'MSMB (Microseminoprotein)',
-    'JCHAIN': 'JCHAIN (J Chain)',
-    'TSPAN1': 'TSPAN1 (Tetraspanin)'
-  }
-
   const umapLegendRef = useRef<HTMLDivElement>(null);
   const umapRef = useRef<HTMLDivElement>(null);
   const featureCurveRef = useRef<HTMLDivElement>(null);
@@ -44,14 +16,15 @@ const Plots = () => {
   const nCountRef = useRef<HTMLDivElement>(null);
   const percentMTRef = useRef<HTMLDivElement>(null);
 
-  const [resetToggle, setResetToggle] = useState(false);
+  const [geneOptions, setGeneOptions] = useState<{value: string, label: string}[]>([])
   const [umapFill, setUmapFill] = useState('cluster');
   const [containerWidth, setContainerWidth] = useState(800);
   const [legendPosition, setLegendPosition] = useState('topright');
+  const [clusterCount, setClusterCount] = useState(0);
   const [geneComparisonMode, setGeneComparisonMode] = useState('categorical');
-
-  const [gene, setGene] = useState(Object.keys(geneLabels)[0]);
-  const [gene2, setGene2] = useState(Object.keys(geneLabels)[1]);
+  const [geneExpressionRates, setGeneExpressionRates] = useState<{gene: string, expressionRate: number}[]>([]);
+  const [gene, setGene] = useState('');
+  const [gene2, setGene2] = useState('');
 
   const [selectionSummary, setSelectionSummary] = useState({
     totalCells: 0,
@@ -62,14 +35,16 @@ const Plots = () => {
     clusterCounts: {}
   });
 
+  const umapCategories = createUmapCategories(gene, gene2, geneComparisonMode, clusterCount);
+  const umapCategory = umapCategories[umapFill as keyof typeof umapCategories];
+
   useEffect(() => {
-    // Observe the card-body or col-9 instead of the umapRef
     const cardBody = umapRef.current?.parentElement;
     if (!cardBody) return;
     
     const resizeObserver = new ResizeObserver(entries => {
       const width = entries[0].contentRect.width;
-      console.log('Observed width:', width);
+      // console.log('Observed width:', width);
       setContainerWidth(width || 800);
     });
     
@@ -77,12 +52,143 @@ const Plots = () => {
     return () => resizeObserver.disconnect();
   }, []);
 
+  const coordinator = vg.coordinator();
+  // vg.coordinator().databaseConnector(vg.socketConnector());
+
+  const getClusterCount = async (coordinator: any, column: any) => {
+    try {
+      const result = await coordinator.query(
+        Query.from('cells')
+          .select({ count: count() })
+          .groupby(column)
+      );
+      
+      return result.numRows; // This is the number of unique clusters
+    } catch (error) {
+      console.error(`Failed to get cluster count for ${column}:`, error);
+      return 0;
+    }
+  };
+
+  useEffect(() => {
+    const loadClusterCount = async () => {
+      if (coordinator) {
+        const count = await getClusterCount(coordinator, 'pca_cluster');
+        setClusterCount(count);
+      }
+    };
+    
+    loadClusterCount();
+  }, [coordinator]);
+
+  const getGeneColumns = async (coordinator: any) => {
+    try {
+      const result = await coordinator.query(
+        vg.sql`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name = 'cells' 
+          AND column_name LIKE 'gene_%'
+          ORDER BY column_name
+        `
+      );
+      
+      const geneColumns = [];
+      for (let i = 0; i < result.numRows; i++) {
+        geneColumns.push(result.getChild('column_name').get(i));
+      }
+      return geneColumns;
+    } catch (error) {
+      console.warn('INFORMATION_SCHEMA not available:', error);
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    const loadGenes = async () => {
+      try {
+        const columns = await getGeneColumns(coordinator);
+        if (columns && columns.length > 0) {
+          setGene(columns[0]);
+          setGene2(columns[1]);
+          setGeneOptions(columns.map((gene: string) => {
+            return({value: gene, label: gene.replace('gene_', '')})
+          }))
+        }
+      } catch (error) {
+        console.error('Failed to load gene columns:', error);
+      }
+    };
+
+    if (coordinator) {
+      loadGenes();
+    }
+  }, []);
+
+  useEffect(() => {
+    const geneClient = makeClient({
+      coordinator: coordinator,
+      selection: $allFilter,
+      query: (predicate) => {
+        // Build the SELECT clause with count of non-zero expression for each gene column
+        const countSelects: Record<string, any> = {};
+        geneOptions.forEach(option => {
+          const geneCol = option.value; // This is the full gene_XXX column name
+          countSelects[`count_${geneCol}`] = sum(vg.sql`CASE WHEN ${geneCol} > 0 THEN 1 ELSE 0 END`);
+        });
+        // Also get total count for calculating expression rate
+        countSelects['total_count'] = count();
+
+        // Create the query
+        let query = Query.from('cells').select(countSelects);
+        if (predicate) {
+          query = query.where(predicate);
+        }
+        return query;
+      },
+      queryResult: async (data: any) => {
+        // Convert results to array of objects
+        const geneExpressionRates: {gene: string, expressionRate: number}[] = [];
+        
+        try {
+          const totalCells = data.getChild('total_count').get(0);
+          
+          geneOptions.forEach(option => {
+            const geneCol = option.value;
+            const countColumnName = `count_${geneCol}`;
+            try {
+              const nonZeroCount = data.getChild(countColumnName).get(0);
+              const expressionRate = totalCells > 0 ? (nonZeroCount / totalCells) * 100 : 0;
+              geneExpressionRates.push({
+                gene: option.label, // This is the cleaned name without gene_ prefix
+                expressionRate: expressionRate
+              });
+            } catch (error) {
+              console.warn(`Could not get expression rate for ${geneCol}:`, error);
+            }
+          });
+
+          setGeneExpressionRates(geneExpressionRates.sort((a, b) => b.expressionRate - a.expressionRate).slice(0, 20));
+        } catch (error) {
+          console.error('Error processing expression rates:', error);
+        }
+      },
+      queryError: (error) => {
+        console.error('Gene expression rates query error:', error);
+      },
+    });
+
+    return () => {
+      geneClient.destroy();
+    };
+  }, [geneOptions.length]);
+  
   useEffect(() => {
     const client = makeClient({
-      coordinator: vg.coordinator(),
+      coordinator: coordinator,
       selection: $allFilter,
       prepare: async () => {
-        const result = await vg.coordinator().query(
+        const result = await coordinator.query(
           Query.from('cells').select({ count: count() })
         );
         setSelectionSummary(prev => ({
@@ -115,7 +221,7 @@ const Plots = () => {
       },
       queryResult: async (data: any) => {
         // Get all clusters first (unfiltered)
-        const allClustersResult = await vg.coordinator().query(
+        const allClustersResult = await coordinator.query(
           Query.from('cells')
             .select('cluster')
             .groupby('cluster')
@@ -193,101 +299,103 @@ const Plots = () => {
     return () => {
       client.destroy();
     };
-  }, [resetToggle, umapFill, gene, gene2, containerWidth, geneComparisonMode]);
+  }, [umapFill, gene, gene2, containerWidth, geneComparisonMode]);
 
-    // const $xs = vg.Selection.intersect();
-  // const $ys = vg.Selection.intersect();
-  const $legendBrush = vg.Selection.intersect({ cross: true }); // Legend selection (categorical)
-  const $spatialBrush = vg.Selection.intersect(); // Spatial brush (positional) 
-  const $saturationBrush = vg.Selection.crossfilter(); // QC brush for saturation plots
-  const $featureOrderBrush = vg.Selection.intersect(); // QC brush for saturation plots
-  const $featureUMIBrush = vg.Selection.intersect(); // QC brush for saturation plots
-  const $qcBrush = vg.Selection.crossfilter(); // QC brush for density plots
+  const $legendBrush = useRef(vg.Selection.intersect({ cross: true })).current;
+  const $umapBrush = useRef(vg.Selection.intersect()).current;
+  
+  const $nFeatureBrush = useRef(vg.Selection.intersect()).current;
+  const $nCountBrush = useRef(vg.Selection.intersect()).current;
+  const $percentMTBrush = useRef(vg.Selection.intersect()).current;
 
-  const $saturationFilter = vg.Selection.intersect({ include: [$legendBrush, $spatialBrush, $qcBrush] }); // Combined selection for filtering legend, spatial, and qc density
-  // const $featureOrderFilter = vg.Selection.intersect({ include: [$legendBrush, $spatialBrush, $qcBrush, $featureUMIBrush] }); // Combined selection for filtering legend, spatial, and qc density
-  // const $featureUMIFilter = vg.Selection.intersect({ include: [$legendBrush, $spatialBrush, $qcBrush, $featureOrderBrush] }); // Combined selection for filtering legend, spatial, and qc density
-  const $densityFilter = vg.Selection.intersect({ include: [$legendBrush, $spatialBrush, $saturationBrush, $featureOrderBrush, $featureUMIBrush] }); // Combined selection for filtering legend, spatial, and qc density
-  const $allFilter = vg.Selection.intersect({ include: [$legendBrush, $spatialBrush, $qcBrush, $saturationBrush, $featureOrderBrush, $featureUMIBrush] }); // Combined selection for filtering all
+  const $featureCurveBrush = useRef(vg.Selection.intersect()).current;
+  const $featureUMICurveBrush = useRef(vg.Selection.intersect()).current;
 
-  // const handleSoftReset = () => {
-  //   $legendBrush.reset();
-  //   $spatialBrush.reset();
-  //   $qcBrush.reset();
-  // };
+  const $saturationFilter = useRef(vg.Selection.intersect({ include: [$legendBrush, $umapBrush, $nFeatureBrush, $nCountBrush, $percentMTBrush] })).current;
+  const $densityFilter = useRef(vg.Selection.intersect({ include: [$legendBrush, $umapBrush, $featureCurveBrush, $featureUMICurveBrush] })).current;
+  const $allFilter = useRef(vg.Selection.intersect({ include: [$legendBrush, $umapBrush, $nFeatureBrush, $nCountBrush, $percentMTBrush, $featureCurveBrush, $featureUMICurveBrush] })).current;
+  
+  const handleReset = () => {
+    $legendBrush.reset();
+    $umapBrush.reset();
 
-  const handleHardReset = () => {
-    setResetToggle(!resetToggle)
+    $nFeatureBrush.reset();
+    $nCountBrush.reset();
+    $percentMTBrush.reset();
+
+    $featureCurveBrush.reset();
+    $featureUMICurveBrush.reset();
   };
+
+  const nFeatureValues = $nFeatureBrush.value && Array.isArray($nFeatureBrush.value) && $nFeatureBrush.value.length >= 2
+    ? $nFeatureBrush.value as [number, number]
+    : null;
+    
+  const nCountValues = $nCountBrush.value && Array.isArray($nCountBrush.value) && $nCountBrush.value.length >= 2
+    ? $nCountBrush.value as [number, number]
+    : null;
+
+  const percentMTValues = $percentMTBrush.value && Array.isArray($percentMTBrush.value) && $percentMTBrush.value.length >= 2
+    ? $percentMTBrush.value as [number, number]
+    : null;
+
+    useEffect(() => { // Reset all brushes when the category changes
+      $nFeatureBrush.reset();
+      $nCountBrush.reset();
+      $percentMTBrush.reset();
+      $featureCurveBrush.reset();
+      $featureUMICurveBrush.reset();
+      $umapBrush.reset();
+      $legendBrush.reset();
+    }, [umapFill, gene, gene2, geneComparisonMode]);
+
+  // const updatePercentMTBrush = (min: number, max: number): void => {
+  //   $percentMTBrush.update({
+  //     source: 'user',
+  //     clients: new Set(),
+  //     value: [min, max],
+  //     predicate: vg.sql`percent_mt >= ${min} AND percent_mt <= ${max}`,
+  //     meta: {
+  //       field: 'percent_mt',
+  //       type: 'range'
+  //     }
+  //   } as any);
+  // };
+  // updatePercentMTBrush(5.0, 15.0);
 
   useEffect(() => { // draws vgplots
     const createChart = async () => {
-      // vg.coordinator().databaseConnector(vg.socketConnector());
 
       const umapWidth = containerWidth;
       const umapHeight = umapWidth * 9/13;
-      const fillValue = umapFill === 'genes' 
-        ? (() => {
-            switch(geneComparisonMode) {
-              case 'addition':
-                return vg.sql`${gene} + ${gene2}`;
-              case 'geometric':
-                return vg.sql`SQRT(${gene} * ${gene2})`;
-              case 'logfold':
-                return vg.sql`LOG(${gene2} + 1) - LOG(${gene} + 1)`;
-              case 'categorical':
-                return gene === gene2
-                  ? vg.sql`CASE WHEN ${gene} > 1 THEN '${gene} Expressed' ELSE 'Not Expressed' END`
-                  : vg.sql`CASE WHEN ${gene} > 1 AND ${gene2} > 1 THEN 'Both Expressed' WHEN ${gene} > 0 THEN '${gene} Expressed' WHEN ${gene2} > 0 THEN '${gene2} Expressed' ELSE 'Neither Expressed' END`;
-              default:
-                return gene;
-            }
-          })() // () IS REQUIRED
-        : umapFill === 'gene' 
-        ? gene
-        : umapFill;
-      const colorScale = (umapFill === 'cluster') || (umapFill === 'genes' && geneComparisonMode === 'categorical') ? 'ordinal' : 'linear';
-      const colorRange = umapFill === 'cluster' 
-        ? ['#1f77b4', '#aec7e8', '#ff7f0e', '#ffbb78', '#2ca02c', 
-          '#98df8a', '#d62728', '#ff9896', '#9467bd', '#c5b0d5', 
-          '#8c564b', '#c49c94', '#e377c2', '#f7b6d3', '#7f7f7f', 
-          '#c7c7c7', '#bcbd22', '#dbdb8d', '#17becf', '#9edae5']
-        : umapFill === 'genes' && geneComparisonMode === 'categorical'
-        ? gene === gene2 
-          ? ['#1f77b4', '#cccccc20'] 
-          : ['#333333', '#1f77b4', '#ff7f0e', '#cccccc20']
-        : umapFill === 'genes' && geneComparisonMode === 'logfold' 
-        ? ['#313695', '#abd9e9', '#cccccc20', '#fee08b', '#d73027']
-        : ['#f0f0f0', '#deebf7', '#9ecae1', '#3182bd', '#08519c'];
 
       const umapArgs = [
         vg.dot(vg.from('cells', {}), {
           x: 'UMAP_1',
           y: 'UMAP_2',
-          fill: fillValue,
+          fill: umapCategory.fillValue,
           r: 1.5,
           opacity: 0.5,
           tip: { format: { x: false, y: false, fill: false } },
           title: 'cluster'
         }),
         vg.name('umap'),
-        vg.intervalXY({ as: $spatialBrush, brush: { fill: 'none', stroke: '#888' } }),
-        vg.highlight({ by: $allFilter, fill: '#ccc', fillOpacity: 0.2 }),
+        vg.intervalXY({ as: $umapBrush, brush: { fill: 'none', stroke: '#888' } }),
+        vg.highlight({ by: $allFilter, fill: umapFill === 'excluded' ? 'red' : '#ccc', fillOpacity: umapFill === 'excluded' ? 0.3 : 0.2 }),
         vg.xLabel('UMAP Dimension 1'),
         vg.yLabel('UMAP Dimension 2'),
         vg.width(umapWidth),
         vg.height(umapHeight),
       ];
 
-      if (umapFill === 'cluster' || umapFill === 'gene' || umapFill === 'genes') {
-        umapArgs.push(vg.colorScale(colorScale), vg.colorRange(colorRange));
+      if (umapCategory.colorScale) {
+        umapArgs.push(vg.colorScale(umapCategory.colorScale));
       }
-      if (umapFill === 'genes' && geneComparisonMode === 'categorical') {
-        if (gene === gene2) {
-          umapArgs.push(vg.colorDomain([`${gene} Expressed`, 'Not Expressed']))
-        } else {
-          umapArgs.push(vg.colorDomain(['Both Expressed', `${gene} Expressed`, `${gene2} Expressed`, 'Neither Expressed']))
-        }
+      if (umapCategory.colorRange) {
+        umapArgs.push(vg.colorRange(umapCategory.colorRange));
+      }
+      if (umapCategory.colorDomain) {
+        umapArgs.push(vg.colorDomain(umapCategory.colorDomain));
       }
 
       const umap = vg.plot(...umapArgs);
@@ -297,17 +405,9 @@ const Plots = () => {
 
       const umapLegend = vg.colorLegend({ 
         for: 'umap',
-        as: $legendBrush, 
+        as: umapFill === 'excluded' ? null : $legendBrush, 
         columns: 1, 
-        label: umapFill === 'genes' 
-          ? geneComparisonMode === 'addition' 
-            ? `${gene} or ${gene2}`
-            : geneComparisonMode === 'geometric' 
-            ? `${gene} and ${gene2}`
-            : `${gene} vs. ${gene2}`
-          : umapFill === 'gene' 
-          ? geneLabels[gene as keyof typeof geneLabels]
-          : legendLabels[umapFill as keyof typeof legendLabels]
+        label: umapCategory.legendTitle ? umapCategory.legendTitle : umapCategory.title
       });
       if (umapLegendRef.current) {
         umapLegendRef.current.replaceChildren(umapLegend);
@@ -321,10 +421,9 @@ const Plots = () => {
           opacity: 0.3,
           tip: false,
         }),
-        // vg.panZoom({x: $xs, y: $ys}),
-        vg.intervalY({ as: $saturationBrush }),
+        vg.intervalY({ as: $featureCurveBrush }),
         vg.xLabel('Cell'),
-        vg.yLabel(legendLabels['nFeature_RNA']),
+        vg.yLabel(umapCategories.nFeature_RNA.title),
         vg.width(umapWidth),
         vg.height(umapHeight * 2/5),
       );
@@ -340,10 +439,9 @@ const Plots = () => {
           opacity: 0.3,
           tip: false,
         }),
-        // vg.panZoom({x: $xs, y: $ys}),
-        vg.intervalXY({ as: $saturationBrush }),
-        vg.xLabel(legendLabels['nCount_RNA']),
-        vg.yLabel(legendLabels['nFeature_RNA']),
+        vg.intervalXY({ as: $featureUMICurveBrush }),
+        vg.xLabel(umapCategories.nCount_RNA.title),
+        vg.yLabel(umapCategories.nFeature_RNA.title),
         vg.width(umapWidth),
         vg.height(umapHeight * 2/5),
       );
@@ -352,51 +450,48 @@ const Plots = () => {
       }
 
       const nFeature = vg.plot(
-        vg.densityX(vg.from('cells', { filterBy: $densityFilter }), {
-          y: 'nFeature_RNA',
+        vg.densityY(vg.from('cells', { filterBy: $densityFilter }), {
+          x: 'nFeature_RNA',
           opacity: 0.5,
           tip: false,
         }),
-        // vg.panZoom({x: $xs, y: $ys}),
-        vg.intervalY({ as: $qcBrush }),
-        vg.yLabel(legendLabels['nFeature_RNA']),
-        vg.xAxis(null),
-        vg.width(80),
-        vg.height(400),
+        vg.intervalX({ as: $nFeatureBrush }),
+        vg.xLabel(umapCategories.nFeature_RNA.title),
+        vg.yAxis(null),
+        vg.width(umapWidth),
+        vg.height(88),
       );
       if (nFeatureRef.current) {
         nFeatureRef.current.replaceChildren(nFeature);
       }
 
       const nCount = vg.plot(
-        vg.densityX(vg.from('cells', { filterBy: $densityFilter }), {
-          y: 'nCount_RNA',
+        vg.densityY(vg.from('cells', { filterBy: $densityFilter }), {
+          x: 'nCount_RNA',
           opacity: 0.5,
           tip: false,
         }),
-        // vg.panZoom({x: $xs, y: $ys}),
-        vg.intervalY({ as: $qcBrush }),
-        vg.yLabel(legendLabels['nCount_RNA']),
-        vg.xAxis(null),
-        vg.width(80),
-        vg.height(400),
+        vg.intervalX({ as: $nCountBrush }),
+        vg.xLabel(umapCategories.nCount_RNA.title),
+        vg.yAxis(null),
+        vg.width(umapWidth),
+        vg.height(88),
       );
       if (nCountRef.current) {
         nCountRef.current.replaceChildren(nCount);
       }
 
       const percentMT = vg.plot(
-        vg.densityX(vg.from('cells', { filterBy: $densityFilter }), {
-          y: 'percent_mt',
+        vg.densityY(vg.from('cells', { filterBy: $densityFilter }), {
+          x: 'percent_mt',
           opacity: 0.5,
           tip: false,
         }),
-        // vg.panZoom({x: $xs, y: $ys}),
-        vg.intervalY({ as: $qcBrush }),
-        vg.yLabel(legendLabels['percent_mt']),
-        vg.xAxis(null),
-        vg.width(80),
-        vg.height(400),
+        vg.intervalX({ as: $percentMTBrush }),
+        vg.xLabel(umapCategories.percent_mt.title),
+        vg.yAxis(null),
+        vg.width(umapWidth),
+        vg.height(88),
       );
       if (percentMTRef.current) {
         percentMTRef.current.replaceChildren(percentMT);
@@ -404,7 +499,7 @@ const Plots = () => {
     };
 
     createChart();
-  }, [resetToggle, umapFill, gene, gene2, containerWidth, geneComparisonMode]);
+  }, [umapFill, gene, gene2, containerWidth, geneComparisonMode]);
 
   return (
     <div className='row'>
@@ -416,7 +511,7 @@ const Plots = () => {
             <span className='fw-bold'>UMAP</span>
             <button 
               className='btn btn-danger btn-xs shadow-sm ms-auto cursor-pointer'
-              onClick={handleHardReset}
+              onClick={handleReset}
             >
               Reset
             </button>
@@ -424,7 +519,7 @@ const Plots = () => {
           <div className='card-body'>
             <div className='' ref={umapRef}></div>
             <div 
-              className={`border px-2 rounded shadow-sm bg-white ${((umapFill === 'cluster') || (umapFill === 'genes' && geneComparisonMode === 'categorical')) && 'pt-1'} ${legendPosition === 'off' ? 'd-none' : 'd-inline-block'}`}
+              className={`border px-2 rounded shadow-sm bg-white ${umapCategory.colorScale === 'ordinal' && 'pt-1'} ${legendPosition === 'off' ? 'd-none' : 'd-inline-block'}`}
               ref={umapLegendRef}
               style={{
                 position: 'absolute',
@@ -439,11 +534,59 @@ const Plots = () => {
 
         <div className='card mb-3 shadow-sm'>
           <div className='card-header text-ss d-flex justify-content-between align-items-end'>
+            <span className='fw-bold'>QC Distribution</span>
+          </div>
+          <div className='card-body pt-1 px-0'>
+            <div className='d-flex flex-row justify-content-between align-items-center border-bottom pb-2'>
+              <div className='flex-grow-1' style={{marginLeft: '-.75rem', marginRight: '2rem'}} ref={nFeatureRef}></div>
+              <div className='' style={{width: '80px'}}>
+                <p className='text-xs mb-0'>
+                  <strong>Max: </strong>
+                  {nFeatureValues ? nFeatureValues[1].toFixed(1) : 'Inf'}
+                </p>
+                <p className='text-xs mb-0'>
+                  <strong>Min: </strong>
+                  {nFeatureValues ? nFeatureValues[0].toFixed(1) : '0'}
+                </p>
+              </div>
+            </div>
+            <div className='d-flex flex-row justify-content-between align-items-center border-bottom pb-2'>
+              <div className='flex-grow-1' style={{marginLeft: '-0.75rem', marginRight: '2rem'}} ref={nCountRef}></div>
+              <div className='' style={{width: '80px'}}>
+                <p className='text-xs mb-0'>
+                  <strong>Max: </strong>
+                  {nCountValues ? nCountValues[1].toFixed(1) : 'Inf'}
+                </p>
+                <p className='text-xs mb-0'>
+                  <strong>Min: </strong>
+                  {nCountValues ? nCountValues[0].toFixed(1) : '0'}
+                </p>
+              </div>
+            </div>
+            <div className='d-flex flex-row justify-content-between align-items-center'>
+              <div className='flex-grow-1' style={{marginLeft: '-0.75rem', marginRight: '2rem'}} ref={percentMTRef}></div>
+              <div className='' style={{width: '80px'}}>
+                <p className='text-xs mb-0'>
+                  <strong>Max: </strong>
+                  {percentMTValues ? percentMTValues[1].toFixed(1) : 'Inf'}
+                </p>
+                <p className='text-xs mb-0'>
+                  <strong>Min: </strong>
+                  {percentMTValues ? percentMTValues[0].toFixed(1) : '0'}
+                </p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div className='card mb-3 shadow-sm'>
+          <div className='card-header text-ss d-flex justify-content-between align-items-end'>
             <span className='fw-bold'>Saturation Curves</span>
           </div>
-          <div className='card-body'>
-            <div className='' ref={featureCurveRef}></div>
-            <div className='' ref={featureUMICurveRef}></div>
+          <div className='card-body px-0'>
+            <div className='px-3 pb-2 border-bottom' ref={featureCurveRef}></div>
+            <div className='px-3 pt-2' ref={featureUMICurveRef}></div>
           </div>
         </div>
       
@@ -463,43 +606,35 @@ const Plots = () => {
               value={umapFill}
               onChange={(e) => setUmapFill(e.target.value)}
             >
-              {Object.keys(legendLabels).map((key) => (
-                <option key={key} value={key}>{legendLabels[key as keyof typeof legendLabels]}</option>
+              {Object.keys(umapCategories).map((key) => (
+                <option key={key} value={key}>{umapCategories[key as keyof typeof umapCategories].title}</option>
               ))}
-              <option value='gene'>Gene Expression</option>
-              <option value='genes'>Gene Coexpression</option>
             </select>
             
             {(umapFill === 'gene' || umapFill === 'genes') && (
               <>
                 <p className='text-ss mt-3 mb-0 fw-bold'>Gene</p>
-                <select 
-                  className='form-select form-select-sm'
-                  aria-label='geneFill'
-                  value={gene}
-                  onChange={(e) => setGene(e.target.value)}
-                >
-                  {Object.keys(geneLabels).map((key) => (
-                      <option key={key} value={key}>{geneLabels[key as keyof typeof geneLabels]}</option>
-                    ))
-                  }
-                </select>
+                <Select 
+                  className=''
+                  options={geneOptions} 
+                  value={{value: gene, label: gene.replace('gene_', '')}} 
+                  onChange={(selectedOption) => setGene(selectedOption?.value || '')}
+                  isSearchable
+                  styles={bootstrapSelectStyles}
+                />
               </>
             )}
 
             {umapFill === 'genes' && (
               <>
                 <p className='text-ss mt-3 mb-0 fw-bold'>Gene 2</p>
-                <select 
-                  className='form-select form-select-sm'
-                  aria-label='geneFill'
-                  value={gene2}
-                  onChange={(e) => setGene2(e.target.value)}
-                >
-                  {Object.keys(geneLabels).map((key) => (
-                    <option key={key} value={key}>{geneLabels[key as keyof typeof geneLabels]}</option>
-                  ))}
-                </select>
+                <Select 
+                  options={geneOptions} 
+                  value={{value: gene2, label: gene2.replace('gene_', '')}} 
+                  onChange={(selectedOption) => setGene2(selectedOption?.value || '')}
+                  isSearchable
+                  styles={bootstrapSelectStyles}
+                />
 
                 <p className='text-ss mt-3 mb-0 fw-bold'>Gene Comparison</p>
                 <select 
@@ -535,7 +670,7 @@ const Plots = () => {
             <span className='fw-bold'>Selection Metrics</span>
           </div>
           <div className='card-body p-0'>
-            <table className='table table-striped table-hover table-rounded text-xs'>
+            <table className='table table-striped table-rounded text-xs'>
               <thead>
                 <tr>
                   <th>Cluster</th>
@@ -560,20 +695,25 @@ const Plots = () => {
 
         <div className='card mb-3 shadow-sm'>
           <div className='card-header text-ss d-flex justify-content-between align-items-end'>
-            <span className='fw-bold'>QC Distribution</span>
+            <span className='fw-bold'>Most Expressed Genes</span>
           </div>
-          <div className='card-body pb-0'>
-            <div className='row'>
-              <div className='col-4'>
-                <div className='' ref={nFeatureRef}></div>
-              </div>
-              <div className='col-4'>
-                <div className='' ref={nCountRef}></div>
-              </div>
-              <div className='col-4'>
-                <div className='' ref={percentMTRef}></div>
-              </div>
-            </div>
+          <div className='card-body p-0'>
+            <table className='table table-striped table-rounded text-xs'>
+              <thead>
+                <tr>
+                  <th>Gene</th>
+                  <th>Expression Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {geneExpressionRates.map((item, index) => (
+                  <tr key={index}>
+                    <td>{item.gene}</td>
+                    <td>{item.expressionRate.toFixed(2)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 

@@ -8,7 +8,7 @@ library(data.table)
 source(file.path('R', 'server.R'))
 source(file.path('R', 'query.R'))
 
-data <- fread('umap_sample.txt')
+data <- fread('data/umap_sample.txt')
 
 
 # Main function to run the server
@@ -23,13 +23,31 @@ run <- function() {
   con <- dbConnect(duckdb(), dbdir = db_path)
   on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
   
+  clean_sql_names <- function(names) {
+    # Replace any non-alphanumeric characters (except underscore) with underscore
+    cleaned <- gsub('[^A-Za-z0-9_]', '_', names)
+    
+    # Ensure names don't start with a number
+    cleaned <- ifelse(grepl('^[0-9]', cleaned), paste0('col_', cleaned), cleaned)
+    
+    # Remove multiple consecutive underscores
+    cleaned <- gsub('_{2,}', '_', cleaned)
+    
+    # Remove trailing underscores
+    cleaned <- gsub('_$', '', cleaned)
+    
+    return(cleaned)
+  }
+  
   # Create a dummy 'cells' table for testing if using an in-memory database
   if (db_path == ':memory:') {
     # cat('Creating table for testing...\n')
     
-    gene_columns <- colnames(data)[8:length(colnames(data))]
+    original_names <- colnames(data)
+    clean_names <- clean_sql_names(original_names)
+    colnames(data) <- clean_names
     
-    # Create the gene column definitions with DOUBLE type
+    gene_columns <- colnames(data)[10:length(colnames(data))]
     gene_sql <- paste(gene_columns, 'DOUBLE', collapse = ',\n        ')
     
     # Build the complete SQL statement
@@ -37,39 +55,24 @@ run <- function() {
       CREATE TABLE cells (
         cell_id VARCHAR,
         cluster VARCHAR,
+        pca_cluster VARCHAR,
+        sample VARCHAR,
+        orig_ident VARCHAR,
         UMAP_1 DOUBLE,
         UMAP_2 DOUBLE,
         nFeature_RNA INTEGER,
         nCount_RNA INTEGER,
         percent_mt DOUBLE,
-        sample VARCHAR,
         ', gene_sql, '
       );
     ')
     
     dbExecute(con, query)
     
-    # Populate with sample data
-    # n_cells <- 5000
-    # set.seed(42)
-    # cells_data <- data.frame(
-    #   cell_id = paste0('cell_', 1:n_cells),
-    #   cluster = sample(paste0('Cluster_', 1:8), n_cells, replace = TRUE),
-    #   UMAP_1 = rnorm(n_cells, mean = 0, sd = 2),
-    #   UMAP_2 = rnorm(n_cells, mean = 0, sd = 2),
-    #   nFeature_RNA = sample(500:3000, n_cells, replace = TRUE),
-    #   nCount_RNA = sample(1000:10000, n_cells, replace = TRUE),
-    #   percent_mt = runif(n_cells, min = 0, max = 20),
-    #   sample = sample(c('Sample_A', 'Sample_B'), n_cells, replace = TRUE)
-    # )
-    
     n_cells <- nrow(data)
     cells_data <- data
     cells_data$cell_id = 1:n_cells
-    cells_data$sample = 'test_data'
-    cells_data <- setnames(cells_data, c('percent.mt'), c('percent_mt'))
-    cells_data$orig.ident <- NULL
-    
+
     dbWriteTable(con, 'cells', cells_data, append = TRUE, row.names = FALSE)
     # cat('Dummy table created and populated.\n')
   }

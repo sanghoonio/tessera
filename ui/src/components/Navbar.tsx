@@ -41,7 +41,7 @@ const NavLink = (props: NavLinkProps) => {
 };
 
 function Navbar() {
-  const location = useLocation().pathname.substring(1) || 'details';
+  const location = useLocation().pathname.substring(1) || 'summary';
   const [titleText, setTitleText] = useState('Tessera');
 
   return (
@@ -64,14 +64,14 @@ function Navbar() {
               <p className='fst-condensed mt-4 mb-0'>Views</p>
               <div className=''>
                 <NavLink
-                  page={'details'}
-                  title={'Details'}
+                  page={'summary'}
+                  title={'Overview'}
                   position='side'
                   currentPage={location}
                 />
                 <NavLink
-                  page={'summary'}
-                  title={'Summary'}
+                  page={'details'}
+                  title={'Projections'}
                   position='side'
                   currentPage={location}
                 />
@@ -144,14 +144,14 @@ function Navbar() {
               <p className='fst-condensed mb-0'>Home</p>
               <div className=''>
                 <NavLink
-                  page={'about'}
-                  title={'About'}
+                  page={'summary'}
+                  title={'Overview'}
                   position='side'
                   currentPage={location}
                 />
                 <NavLink
-                  page={'summary'}
-                  title={'Summary'}
+                  page={'details'}
+                  title={'Projection'}
                   position='side'
                   currentPage={location}
                 />

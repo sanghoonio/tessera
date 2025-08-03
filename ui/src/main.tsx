@@ -25,9 +25,9 @@ function Main() {
             <div className='row'>
               <div className='col-12'>
                 <Routes>
-                  <Route path='/' element={<Details />} />
-                  <Route path='/details' element={<Details />} />
+                  <Route path='/' element={<Summary />} />
                   <Route path='/summary' element={<Summary />} />
+                  <Route path='/details' element={<Details />} />
                   <Route path='/config' element={<Config />} />
                 </Routes>
               </div>
