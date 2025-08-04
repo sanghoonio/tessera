@@ -1,11 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import Select from 'react-select'
-
 import * as vg from '@uwdata/vgplot';
-import { makeClient } from "@uwdata/mosaic-core";
-import { Query, count, avg, sum } from "@uwdata/mosaic-sql";
 
 import { createUmapCategories, bootstrapSelectStyles } from '../utils';
+import { fetchColumnCounts, fetchGeneCols, fetchExpressionRates, fetchColumnCountsFilter } from '../clients';
 
 const Plots = () => {
   const umapLegendRef = useRef<HTMLDivElement>(null);
@@ -44,7 +42,6 @@ const Plots = () => {
     
     const resizeObserver = new ResizeObserver(entries => {
       const width = entries[0].contentRect.width;
-      // console.log('Observed width:', width);
       setContainerWidth(width || 800);
     });
     
@@ -55,250 +52,32 @@ const Plots = () => {
   const coordinator = vg.coordinator();
   // vg.coordinator().databaseConnector(vg.socketConnector());
 
-  const getClusterCount = async (coordinator: any, column: any) => {
-    try {
-      const result = await coordinator.query(
-        Query.from('cells')
-          .select({ count: count() })
-          .groupby(column)
-      );
-      
-      return result.numRows; // This is the number of unique clusters
-    } catch (error) {
-      console.error(`Failed to get cluster count for ${column}:`, error);
-      return 0;
-    }
-  };
-
   useEffect(() => {
-    const loadClusterCount = async () => {
-      if (coordinator) {
-        const count = await getClusterCount(coordinator, 'pca_cluster');
-        setClusterCount(count);
-      }
-    };
-    
-    loadClusterCount();
-  }, [coordinator]);
+    if (!coordinator) return;
 
-  const getGeneColumns = async (coordinator: any) => {
-    try {
-      const result = await coordinator.query(
-        vg.sql`
-          SELECT column_name 
-          FROM information_schema.columns 
-          WHERE table_name = 'cells' 
-          AND column_name LIKE 'gene_%'
-          ORDER BY column_name
-        `
-      );
-      
-      const geneColumns = [];
-      for (let i = 0; i < result.numRows; i++) {
-        geneColumns.push(result.getChild('column_name').get(i));
-      }
-      return geneColumns;
-    } catch (error) {
-      console.warn('INFORMATION_SCHEMA not available:', error);
-      return null;
-    }
-  };
-
-  useEffect(() => {
-    const loadGenes = async () => {
-      try {
-        const columns = await getGeneColumns(coordinator);
-        if (columns && columns.length > 0) {
-          setGene(columns[0]);
-          setGene2(columns[1]);
-          setGeneOptions(columns.map((gene: string) => {
-            return({value: gene, label: gene.replace('gene_', '')})
-          }))
-        }
-      } catch (error) {
-        console.error('Failed to load gene columns:', error);
-      }
-    };
-
-    if (coordinator) {
-      loadGenes();
-    }
-  }, []);
-
-  useEffect(() => {
-    const geneClient = makeClient({
-      coordinator: coordinator,
-      selection: $allFilter,
-      query: (predicate) => {
-        // Build the SELECT clause with count of non-zero expression for each gene column
-        const countSelects: Record<string, any> = {};
-        geneOptions.forEach(option => {
-          const geneCol = option.value; // This is the full gene_XXX column name
-          countSelects[`count_${geneCol}`] = sum(vg.sql`CASE WHEN ${geneCol} > 0 THEN 1 ELSE 0 END`);
-        });
-        // Also get total count for calculating expression rate
-        countSelects['total_count'] = count();
-
-        // Create the query
-        let query = Query.from('cells').select(countSelects);
-        if (predicate) {
-          query = query.where(predicate);
-        }
-        return query;
-      },
-      queryResult: async (data: any) => {
-        // Convert results to array of objects
-        const geneExpressionRates: {gene: string, expressionRate: number}[] = [];
-        
-        try {
-          const totalCells = data.getChild('total_count').get(0);
-          
-          geneOptions.forEach(option => {
-            const geneCol = option.value;
-            const countColumnName = `count_${geneCol}`;
-            try {
-              const nonZeroCount = data.getChild(countColumnName).get(0);
-              const expressionRate = totalCells > 0 ? (nonZeroCount / totalCells) * 100 : 0;
-              geneExpressionRates.push({
-                gene: option.label, // This is the cleaned name without gene_ prefix
-                expressionRate: expressionRate
-              });
-            } catch (error) {
-              console.warn(`Could not get expression rate for ${geneCol}:`, error);
-            }
-          });
-
-          setGeneExpressionRates(geneExpressionRates.sort((a, b) => b.expressionRate - a.expressionRate).slice(0, 20));
-        } catch (error) {
-          console.error('Error processing expression rates:', error);
-        }
-      },
-      queryError: (error) => {
-        console.error('Gene expression rates query error:', error);
-      },
+    fetchColumnCounts(coordinator, 'pca_cluster').then(result => {
+      setClusterCount(result);
     });
 
-    return () => {
-      geneClient.destroy();
-    };
-  }, [geneOptions.length]);
+    fetchGeneCols(coordinator).then(result => {
+      if (result && result.length > 0) {
+        setGene(result[0]);
+        setGene2(result[1]);
+        setGeneOptions(result.map((gene: string) => {
+          return({value: gene, label: gene.replace('gene_', '')})
+        }))
+      }
+    })
+  }, []);
   
   useEffect(() => {
-    const client = makeClient({
-      coordinator: coordinator,
-      selection: $allFilter,
-      prepare: async () => {
-        const result = await coordinator.query(
-          Query.from('cells').select({ count: count() })
-        );
-        setSelectionSummary(prev => ({
-          ...prev,
-          totalCells: (result as any).get(0).count
-        }));
-      },
-      query: (predicate) => {
-        // Return a query that gets both stats and cluster counts
-        if (predicate) {
-          return Query.from('cells')
-            .select('cluster', {
-              count: count(),
-              avgFeatures: avg('nFeature_RNA'),
-              avgCount: avg('nCount_RNA'),
-              avgMT: avg('percent_mt')
-            })
-            .where(predicate)
-            .groupby('cluster');
-        } else {
-          return Query.from('cells')
-            .select('cluster', {
-              count: count(),
-              avgFeatures: avg('nFeature_RNA'),
-              avgCount: avg('nCount_RNA'),
-              avgMT: avg('percent_mt')
-            })
-            .groupby('cluster');
-        }
-      },
-      queryResult: async (data: any) => {
-        // Get all clusters first (unfiltered)
-        const allClustersResult = await coordinator.query(
-          Query.from('cells')
-            .select('cluster')
-            .groupby('cluster')
-            .orderby('cluster')
-        ) as any;
-        
-        const allClusters = [];
-        try {
-          for (let i = 0; i < allClustersResult.numRows; i++) {
-            allClusters.push(allClustersResult.getChild('cluster').get(i));
-          }
-        } catch (error) {
-          for (let i = 0; i < allClustersResult.numRows; i++) {
-            allClusters.push(allClustersResult.getChild(0).get(i));
-          }
-        }
-        
-        // Process filtered cluster data from main query
-        const clusterCounts: Record<string | number, number> = {};
-        let totalCount = 0;
-        let totalFeatures = 0;
-        let totalCount_RNA = 0;
-        let totalMT = 0;
-        
-        // Start with all clusters at 0
-        allClusters.forEach(cluster => {
-          clusterCounts[cluster] = 0;
-        });
-        
-        // Update with actual data from filtered results
-        try {
-          for (let i = 0; i < data.numRows; i++) {
-            const cluster = data.getChild('cluster').get(i);
-            const count = data.getChild('count').get(i);
-            const avgFeatures = data.getChild('avgFeatures').get(i);
-            const avgCount = data.getChild('avgCount').get(i);
-            const avgMT = data.getChild('avgMT').get(i);
-            
-            clusterCounts[cluster] = count;
-            totalCount += count;
-            totalFeatures += avgFeatures * count;
-            totalCount_RNA += avgCount * count;
-            totalMT += avgMT * count;
-          }
-        } catch (error) {
-          for (let i = 0; i < data.numRows; i++) {
-            const cluster = data.getChild(0).get(i);
-            const count = data.getChild(1).get(i);
-            const avgFeatures = data.getChild(2).get(i);
-            const avgCount = data.getChild(3).get(i);
-            const avgMT = data.getChild(4).get(i);
-            
-            clusterCounts[cluster] = count;
-            totalCount += count;
-            totalFeatures += avgFeatures * count;
-            totalCount_RNA += avgCount * count;
-            totalMT += avgMT * count;
-          }
-        }
-        
-        setSelectionSummary(prev => ({
-          ...prev,
-          filteredCells: totalCount,
-          avgFeatureRNA: totalCount > 0 ? totalFeatures / totalCount : 0,
-          avgCountRNA: totalCount > 0 ? totalCount_RNA / totalCount : 0,
-          avgPercentMT: totalCount > 0 ? totalMT / totalCount : 0,
-          clusterCounts
-        }));
-      },
-      queryError: (error) => {
-        console.error('Selection query error:', error);
-      },
-    });
-
-    return () => {
-      client.destroy();
-    };
+    const geneClient = fetchExpressionRates(coordinator, $allFilter, geneOptions, setGeneExpressionRates);
+    return () => geneClient.destroy();
+  }, [geneOptions.length > 0]);
+  
+  useEffect(() => {
+    const client = fetchColumnCountsFilter(coordinator, $allFilter, 'cluster', setSelectionSummary);
+    return () => client.destroy();
   }, [umapFill, gene, gene2, containerWidth, geneComparisonMode]);
 
   const $legendBrush = useRef(vg.Selection.intersect({ cross: true })).current;
@@ -339,29 +118,15 @@ const Plots = () => {
     ? $percentMTBrush.value as [number, number]
     : null;
 
-    useEffect(() => { // Reset all brushes when the category changes
-      $nFeatureBrush.reset();
-      $nCountBrush.reset();
-      $percentMTBrush.reset();
-      $featureCurveBrush.reset();
-      $featureUMICurveBrush.reset();
-      $umapBrush.reset();
-      $legendBrush.reset();
-    }, [umapFill, gene, gene2, geneComparisonMode]);
-
-  // const updatePercentMTBrush = (min: number, max: number): void => {
-  //   $percentMTBrush.update({
-  //     source: 'user',
-  //     clients: new Set(),
-  //     value: [min, max],
-  //     predicate: vg.sql`percent_mt >= ${min} AND percent_mt <= ${max}`,
-  //     meta: {
-  //       field: 'percent_mt',
-  //       type: 'range'
-  //     }
-  //   } as any);
-  // };
-  // updatePercentMTBrush(5.0, 15.0);
+  useEffect(() => { // Reset all brushes when the category changes
+    $nFeatureBrush.reset();
+    $nCountBrush.reset();
+    $percentMTBrush.reset();
+    $featureCurveBrush.reset();
+    $featureUMICurveBrush.reset();
+    $umapBrush.reset();
+    $legendBrush.reset();
+  }, [umapFill, gene, gene2, geneComparisonMode]);
 
   useEffect(() => { // draws vgplots
     const createChart = async () => {
@@ -375,7 +140,7 @@ const Plots = () => {
           y: 'UMAP_2',
           fill: umapCategory.fillValue,
           r: 1.5,
-          opacity: 0.5,
+          opacity: 0.44,
           tip: { format: { x: false, y: false, fill: false } },
           title: 'cluster'
         }),
@@ -397,6 +162,12 @@ const Plots = () => {
       if (umapCategory.colorDomain) {
         umapArgs.push(vg.colorDomain(umapCategory.colorDomain));
       }
+      if (umapCategory.colorScheme) {
+        umapArgs.push(vg.colorScheme(umapCategory.colorScheme));
+      }
+      if (umapCategory.colorReverse) {
+        umapArgs.push(vg.colorReverse(umapCategory.colorReverse));
+      }
 
       const umap = vg.plot(...umapArgs);
       if (umapRef.current) {
@@ -414,18 +185,19 @@ const Plots = () => {
       }
 
       const featureCurve = vg.plot(
-        vg.dot(vg.from('cells', { filterBy: $saturationFilter }), {
+        vg.line(vg.from('cells', { filterBy: $saturationFilter }), {
           x: vg.sql`ROW_NUMBER() OVER (ORDER BY nFeature_RNA)`,
           y: 'nFeature_RNA',
-          fill: 'gray',
-          opacity: 0.3,
+          stroke: 'gray',
+          strokeWidth: 3,
+          opacity: 0.5,
           tip: false,
         }),
         vg.intervalY({ as: $featureCurveBrush }),
-        vg.xLabel('Cell'),
+        vg.xLabel('Cell Count'),
         vg.yLabel(umapCategories.nFeature_RNA.title),
         vg.width(umapWidth),
-        vg.height(umapHeight * 2/5),
+        vg.height(255),
       );
       if (featureCurveRef.current) {
         featureCurveRef.current.replaceChildren(featureCurve);
@@ -435,15 +207,17 @@ const Plots = () => {
         vg.dot(vg.from('cells', { filterBy: $saturationFilter }), {
           x: 'nCount_RNA',
           y: 'nFeature_RNA',
-          fill: 'gray',
+          r: 2.5,
+          fill: 'gray', 
           opacity: 0.3,
           tip: false,
         }),
+        vg.colorScheme('magma'),
         vg.intervalXY({ as: $featureUMICurveBrush }),
         vg.xLabel(umapCategories.nCount_RNA.title),
         vg.yLabel(umapCategories.nFeature_RNA.title),
         vg.width(umapWidth),
-        vg.height(umapHeight * 2/5),
+        vg.height(255),
       );
       if (featureUMICurveRef.current) {
         featureUMICurveRef.current.replaceChildren(featureUMICurve);
@@ -537,9 +311,9 @@ const Plots = () => {
             <span className='fw-bold'>QC Distribution</span>
           </div>
           <div className='card-body pt-1 px-0'>
-            <div className='d-flex flex-row justify-content-between align-items-center border-bottom pb-2'>
+            <div className='d-flex flex-row justify-content-between align-items-center border-bottom py-2'>
               <div className='flex-grow-1' style={{marginLeft: '-.75rem', marginRight: '2rem'}} ref={nFeatureRef}></div>
-              <div className='' style={{width: '80px'}}>
+              <div className='me-3 text-center' style={{width: '80px'}}>
                 <p className='text-xs mb-0'>
                   <strong>Max: </strong>
                   {nFeatureValues ? nFeatureValues[1].toFixed(1) : 'Inf'}
@@ -550,9 +324,9 @@ const Plots = () => {
                 </p>
               </div>
             </div>
-            <div className='d-flex flex-row justify-content-between align-items-center border-bottom pb-2'>
+            <div className='d-flex flex-row justify-content-between align-items-center border-bottom py-2'>
               <div className='flex-grow-1' style={{marginLeft: '-0.75rem', marginRight: '2rem'}} ref={nCountRef}></div>
-              <div className='' style={{width: '80px'}}>
+              <div className='me-3 text-center' style={{width: '80px'}}>
                 <p className='text-xs mb-0'>
                   <strong>Max: </strong>
                   {nCountValues ? nCountValues[1].toFixed(1) : 'Inf'}
@@ -563,9 +337,9 @@ const Plots = () => {
                 </p>
               </div>
             </div>
-            <div className='d-flex flex-row justify-content-between align-items-center'>
+            <div className='d-flex flex-row justify-content-between align-items-center pt-2'>
               <div className='flex-grow-1' style={{marginLeft: '-0.75rem', marginRight: '2rem'}} ref={percentMTRef}></div>
-              <div className='' style={{width: '80px'}}>
+              <div className='me-3 text-center' style={{width: '80px'}}>
                 <p className='text-xs mb-0'>
                   <strong>Max: </strong>
                   {percentMTValues ? percentMTValues[1].toFixed(1) : 'Inf'}
@@ -585,8 +359,8 @@ const Plots = () => {
             <span className='fw-bold'>Saturation Curves</span>
           </div>
           <div className='card-body px-0'>
-            <div className='px-3 pb-2 border-bottom' ref={featureCurveRef}></div>
-            <div className='px-3 pt-2' ref={featureUMICurveRef}></div>
+            <div className='px-3 pb-3 border-bottom' ref={featureCurveRef}></div>
+            <div className='px-3 pt-3' ref={featureUMICurveRef}></div>
           </div>
         </div>
       
@@ -667,13 +441,13 @@ const Plots = () => {
 
         <div className='card mb-3 shadow-sm'>
           <div className='card-header text-ss d-flex justify-content-between align-items-end'>
-            <span className='fw-bold'>Selection Metrics</span>
+            <span className='fw-bold'>Counts</span>
           </div>
           <div className='card-body p-0'>
             <table className='table table-striped table-rounded text-xs'>
               <thead>
                 <tr>
-                  <th>Cluster</th>
+                  <th>Cell Type</th>
                   <th>Selected Count</th>
                 </tr>
               </thead>

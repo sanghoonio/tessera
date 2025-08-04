@@ -9,24 +9,29 @@ const tableau20 = [
 ]
 const transparentGray = 'rgba(204, 204, 204, 0.2)'
 const transparentRed = 'rgba(255, 0, 0, 0.3)'
+const grayBlue = ['#f0f0f0', '#deebf7', '#9ecae1', '#3182bd', '#08519c']
 
 export const createUmapCategories = (gene: string, gene2: string, geneComparisonMode: string, clusterCount: number) => {
   const umapCategories = {
     'cluster': {
-      title: 'Cluster', 
+      title: 'Cell Type', 
       legendTitle: null, 
       fillValue: 'cluster', 
       colorScale: 'ordinal', 
       colorRange: tableau20,
-      colorDomain: null
+      colorDomain: null,
+      colorScheme: null,
+      colorReverse: null
     },
     'pca_cluster': {
-      title: 'PCA Group', 
+      title: 'PCA Cluster', 
       legendTitle: null, 
       fillValue: 'pca_cluster', 
       colorScale: 'ordinal', 
       colorRange: tableau20,
-      colorDomain: Array.from({length: clusterCount}, (_, i) => i.toString())
+      colorDomain: Array.from({length: clusterCount}, (_, i) => i.toString()),
+      colorScheme: null,
+      colorReverse: null
     },
     'sample': {
       title: 'Sample', 
@@ -34,7 +39,9 @@ export const createUmapCategories = (gene: string, gene2: string, geneComparison
       fillValue: 'sample', 
       colorScale: 'ordinal', 
       colorRange: tableau20,
-      colorDomain: null
+      colorDomain: null,
+      colorScheme: null,
+      colorReverse: null
     },
     'orig_ident': {
       title: 'Source', 
@@ -42,7 +49,9 @@ export const createUmapCategories = (gene: string, gene2: string, geneComparison
       fillValue: 'orig_ident', 
       colorScale: 'ordinal', 
       colorRange: tableau20,
-      colorDomain: null
+      colorDomain: null,
+      colorScheme: null,
+      colorReverse: null
     },
     'nFeature_RNA': {
       title: 'nFeature', 
@@ -50,7 +59,9 @@ export const createUmapCategories = (gene: string, gene2: string, geneComparison
       fillValue: 'nFeature_RNA', 
       colorScale: 'linear', 
       colorRange: null,
-      colorDomain: null
+      colorDomain: null,
+      colorScheme: 'spectral',
+      colorReverse: true
     },
     'nCount_RNA': {
       title: 'nUMI',
@@ -58,7 +69,9 @@ export const createUmapCategories = (gene: string, gene2: string, geneComparison
       fillValue: 'nCount_RNA', 
       colorScale: 'linear', 
       colorRange: null,
-      colorDomain: null
+      colorDomain: null,
+      colorScheme: 'spectral',
+      colorReverse: true
     }, 
     'percent_mt': {
       title: 'Percent MT', 
@@ -66,15 +79,19 @@ export const createUmapCategories = (gene: string, gene2: string, geneComparison
       fillValue: 'percent_mt', 
       colorScale: 'linear', 
       colorRange: null,
-      colorDomain: null
+      colorDomain: null,
+      colorScheme: 'spectral',
+      colorReverse: true
     },
     'gene': {
       title: 'Gene Expression', 
       legendTitle: `${gene.replace('gene_', '')} Expression`, 
       fillValue: gene, 
       colorScale: 'linear', 
-      colorRange: ['#f0f0f0', '#deebf7', '#9ecae1', '#3182bd', '#08519c'],
-      colorDomain: null
+      colorRange: grayBlue,
+      colorDomain: null,
+      colorScheme: null,
+      colorReverse: null
     },
     'genes': {
       title: 'Gene Coexpression', 
@@ -106,12 +123,14 @@ export const createUmapCategories = (gene: string, gene2: string, geneComparison
           : ['#333333', '#1f77b4', '#ff7f0e', transparentGray] 
         : geneComparisonMode === 'logfold'
           ? ['#313695', '#abd9e9', transparentGray, '#fee08b', '#d73027']
-          : ['#f0f0f0', '#deebf7', '#9ecae1', '#3182bd', '#08519c'],
+          : grayBlue,
       colorDomain: geneComparisonMode === 'categorical' 
         ? gene === gene2 
           ? [`${gene.replace('gene_', '')} Expressed`, 'Not Expressed']
           : ['Both Expressed', `${gene.replace('gene_', '')} Expressed`, `${gene2.replace('gene_', '')} Expressed`, 'Neither Expressed']
-        : null
+        : null,
+      colorScheme: null,
+      colorReverse: null
     }, 
     'excluded': {
       title: 'Filter Exclusion', 
@@ -119,7 +138,9 @@ export const createUmapCategories = (gene: string, gene2: string, geneComparison
       fillValue: transparentGray, 
       colorScale: 'ordinal', 
       colorRange: [transparentGray, transparentRed],
-      colorDomain: ['Included in Filters', 'Excluded by Filters']
+      colorDomain: ['Included in Filters', 'Excluded by Filters'],
+      colorScheme: null,
+      colorReverse: null
     },
   };
 
@@ -129,14 +150,14 @@ export const createUmapCategories = (gene: string, gene2: string, geneComparison
 export const bootstrapSelectStyles = {
   control: (provided: any, state: any) => ({
     ...provided,
-    minHeight: '31px', // form-select-sm height
+    minHeight: '31px',
     height: '31px',
     fontFamily: 'Nunito',
     fontWeight: 400 ,
     fontStyle: 'normal',
-    fontSize: '0.875rem', // Bootstrap's small font size
+    fontSize: '0.875rem',
     borderColor: state.isFocused ? '#86b7fe' : '#dee2e6',
-    borderRadius: '0.25rem', // Bootstrap border radius
+    borderRadius: '0.25rem',
     boxShadow: state.isFocused ? '0 0 0 0.25rem rgba(13, 110, 253, 0.25)' : 'none',
     '&:hover': {
       borderColor: state.isFocused ? '#86b7fe' : '#dee2e6'
