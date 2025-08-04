@@ -1,7 +1,7 @@
 import * as vg from '@uwdata/vgplot';
 
 
-const tableau20 = [
+export const tableau20 = [
   '#1f77b4', '#aec7e8', '#ff7f0e', '#ffbb78', '#2ca02c', 
   '#98df8a', '#d62728', '#ff9896', '#9467bd', '#c5b0d5', 
   '#8c564b', '#c49c94', '#e377c2', '#f7b6d3', '#7f7f7f', 
@@ -11,7 +11,14 @@ const transparentGray = 'rgba(204, 204, 204, 0.2)'
 const transparentRed = 'rgba(255, 0, 0, 0.3)'
 const grayBlue = ['#f0f0f0', '#deebf7', '#9ecae1', '#3182bd', '#08519c']
 
-export const createUmapCategories = (gene: string, gene2: string, geneComparisonMode: string, clusterCount: number) => {
+export const createUmapCategories = (
+  gene: string, 
+  gene2: string, 
+  geneComparisonMode: string, 
+  clusterCount: number, 
+  cellTypes: string[], 
+  samples: string[]
+) => {
   const umapCategories = {
     'cluster': {
       title: 'Cell Type', 
@@ -19,7 +26,7 @@ export const createUmapCategories = (gene: string, gene2: string, geneComparison
       fillValue: 'cluster', 
       colorScale: 'ordinal', 
       colorRange: tableau20,
-      colorDomain: null,
+      colorDomain: cellTypes,
       colorScheme: null,
       colorReverse: null
     },
@@ -39,7 +46,7 @@ export const createUmapCategories = (gene: string, gene2: string, geneComparison
       fillValue: 'sample', 
       colorScale: 'ordinal', 
       colorRange: tableau20,
-      colorDomain: null,
+      colorDomain: samples,
       colorScheme: null,
       colorReverse: null
     },
@@ -138,7 +145,7 @@ export const createUmapCategories = (gene: string, gene2: string, geneComparison
       fillValue: transparentGray, 
       colorScale: 'ordinal', 
       colorRange: [transparentGray, transparentRed],
-      colorDomain: ['Included in Filters', 'Excluded by Filters'],
+      colorDomain: ['Included in Selection', 'Excluded by Selection'],
       colorScheme: null,
       colorReverse: null
     },

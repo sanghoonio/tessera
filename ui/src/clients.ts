@@ -43,7 +43,7 @@ export const fetchGeneCols = async (coordinator: any) => {
 export const fetchExpressionRates = (
   coordinator: any, 
   selection: any,
-  geneOptions: {value: string, label: string}[], 
+  genes: string[],
   setGeneExpressionRates: (geneExpressionRates: any) => void
 ) => makeClient({
   coordinator: coordinator,
@@ -51,14 +51,12 @@ export const fetchExpressionRates = (
   query: (predicate) => {
     // Build the SELECT clause with count of non-zero expression for each gene column
     const countSelects: Record<string, any> = {};
-    geneOptions.forEach(option => {
-      const geneCol = option.value; // This is the full gene_XXX column name
-      countSelects[`count_${geneCol}`] = sum(vg.sql`CASE WHEN ${geneCol} > 0 THEN 1 ELSE 0 END`);
+    genes.forEach(gene => {
+      countSelects[`count_${gene}`] = sum(vg.sql`CASE WHEN ${gene} > 0 THEN 1 ELSE 0 END`);
     });
     // Also get total count for calculating expression rate
     countSelects['total_count'] = count();
 
-    // Create the query
     let query = Query.from('cells').select(countSelects);
     if (predicate) {
       query = query.where(predicate);
@@ -72,22 +70,21 @@ export const fetchExpressionRates = (
     try {
       const totalCells = data.getChild('total_count').get(0);
       
-      geneOptions.forEach(option => {
-        const geneCol = option.value;
-        const countColumnName = `count_${geneCol}`;
+      genes.forEach(gene => {
+        const countColumnName = `count_${gene}`;
         try {
           const nonZeroCount = data.getChild(countColumnName).get(0);
           const expressionRate = totalCells > 0 ? (nonZeroCount / totalCells) * 100 : 0;
           geneExpressionRates.push({
-            gene: option.label, // This is the cleaned name without gene_ prefix
+            gene: gene.replace('gene_', ''),
             expressionRate: expressionRate
           });
         } catch (error) {
-          console.warn(`Could not get expression rate for ${geneCol}:`, error);
+          console.warn(`Could not get expression rate for ${gene}:`, error);
         }
       });
 
-      setGeneExpressionRates(geneExpressionRates.sort((a, b) => b.expressionRate - a.expressionRate).slice(0, 25));
+      setGeneExpressionRates(geneExpressionRates.sort((a, b) => b.expressionRate - a.expressionRate).slice(0, 15));
     } catch (error) {
       console.error('Error processing expression rates:', error);
     }
@@ -102,19 +99,11 @@ export const fetchColumnCountsFilter = (
   coordinator: any, 
   selection: any, 
   column: string,
-  setSelectionSummary: (prev: any) => void
+  columnValues: string[],
+  setSelectionCounts: (prev: any) => void
 ) => makeClient({
   coordinator: coordinator,
   selection: selection,
-  prepare: async () => {
-    const result = await coordinator.query(
-      Query.from('cells').select({ count: count() })
-    );
-    setSelectionSummary((prev: any) => ({
-      ...prev,
-      totalCells: (result as any).get(0).count
-    }));
-  },
   query: (predicate) => {
     return Query.from('cells')
       .select(column, {count: count()})
@@ -122,31 +111,25 @@ export const fetchColumnCountsFilter = (
       .groupby(column);
   },
   queryResult: async (data: any) => {
-    // Get all clusters first (unfiltered)
-    const allClusters = await fetchColumnValues(coordinator, column);
-    
-    // Process filtered cluster data from main query
-    const clusterCounts: Record<string, number> = {};
+    const cellCounts: Record<string, number> = {};
     let totalCount = 0;
     
-    // Start with all clusters at 0
-    allClusters.forEach(cluster => {
-      clusterCounts[cluster] = 0;
+    columnValues.forEach(cluster => {
+      cellCounts[cluster] = 0;
     });
-    
-    // Update with actual data from filtered results
+
     for (let i = 0; i < data.numRows; i++) {
       const cluster = data.getChild(column).get(i);
       const count = data.getChild('count').get(i);
       
-      clusterCounts[cluster] = count;
+      cellCounts[cluster] = count;
       totalCount += count;
     }
     
-    setSelectionSummary((prev: any) => ({
+    setSelectionCounts((prev: any) => ({
       ...prev,
       filteredCells: totalCount,
-      clusterCounts
+      cellCounts
     }));
   },
   queryError: (error) => {

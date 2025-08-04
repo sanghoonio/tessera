@@ -151,3 +151,7 @@ h6 {
 .table-rounded thead tr:first-child th:last-child {
   border-top-right-radius: 0.375rem;
 }
+
+.card-header:has(+ .collapse:not(.show)) {
+  border-bottom: none;
+}

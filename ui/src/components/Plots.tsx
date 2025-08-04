@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import Select from 'react-select'
 import * as vg from '@uwdata/vgplot';
 
-import { createUmapCategories, bootstrapSelectStyles } from '../utils';
-import { fetchColumnCounts, fetchGeneCols, fetchExpressionRates, fetchColumnCountsFilter } from '../clients';
+import { createUmapCategories, bootstrapSelectStyles, tableau20 } from '../utils';
+import { fetchColumnCounts, fetchGeneCols, fetchColumnValues, fetchExpressionRates, fetchColumnCountsFilter } from '../clients';
 
 const Plots = () => {
   const umapLegendRef = useRef<HTMLDivElement>(null);
@@ -14,73 +14,56 @@ const Plots = () => {
   const nCountRef = useRef<HTMLDivElement>(null);
   const percentMTRef = useRef<HTMLDivElement>(null);
 
-  const [geneOptions, setGeneOptions] = useState<{value: string, label: string}[]>([])
+  const [showQCDist, setShowQCDist] = useState(false);
+  const [showSaturation, setShowSaturation] = useState(false);
+  const [showSettings, setShowSettings] = useState(true);
+  const [showCellTypeCount, setShowCellTypeCount] = useState(true);
+  const [showSampleCount, setShowSampleCount] = useState(true);
+  const [showGeneExpr, setShowGeneExpr] = useState(false);
+
   const [umapFill, setUmapFill] = useState('cluster');
   const [containerWidth, setContainerWidth] = useState(800);
   const [legendPosition, setLegendPosition] = useState('topright');
   const [clusterCount, setClusterCount] = useState(0);
+  const [cellTypes, setCellTypes] = useState<string[]>([]);
+  const [samples, setSamples] = useState<string[]>([]);
+
   const [geneComparisonMode, setGeneComparisonMode] = useState('categorical');
   const [geneExpressionRates, setGeneExpressionRates] = useState<{gene: string, expressionRate: number}[]>([]);
+  const [genes, setGenes] = useState<string[]>([])
   const [gene, setGene] = useState('');
   const [gene2, setGene2] = useState('');
 
-  const [selectionSummary, setSelectionSummary] = useState({
+  const [selectedCellTypeCounts, setSelectedCellTypeCounts] = useState({
     totalCells: 0,
     filteredCells: 0,
-    avgFeatureRNA: 0,
-    avgCountRNA: 0,
-    avgPercentMT: 0,
-    clusterCounts: {}
+    cellCounts: {}
+  });
+  const [selectedSampleCounts, setSelectedSampleCounts] = useState({
+    totalCells: 0,
+    filteredCells: 0,
+    cellCounts: {}
   });
 
-  const umapCategories = createUmapCategories(gene, gene2, geneComparisonMode, clusterCount);
+  const geneOptions = useMemo(() => 
+    genes.map((gene: string) => ({
+      value: gene, 
+      label: gene.replace('gene_', '')
+    })),
+    [genes]
+  );
+
+  const umapCategories = useMemo(() => 
+    createUmapCategories(gene, gene2, geneComparisonMode, clusterCount, cellTypes, samples),
+    [gene, gene2, geneComparisonMode, clusterCount, cellTypes, samples]
+  );
   const umapCategory = umapCategories[umapFill as keyof typeof umapCategories];
 
-  useEffect(() => {
-    const cardBody = umapRef.current?.parentElement;
-    if (!cardBody) return;
-    
-    const resizeObserver = new ResizeObserver(entries => {
-      const width = entries[0].contentRect.width;
-      setContainerWidth(width || 800);
-    });
-    
-    resizeObserver.observe(cardBody);
-    return () => resizeObserver.disconnect();
-  }, []);
-
-  const coordinator = vg.coordinator();
+  // const coordinator = vg.coordinator();
+  const coordinator = useRef(vg.coordinator()).current;
   // vg.coordinator().databaseConnector(vg.socketConnector());
 
-  useEffect(() => {
-    if (!coordinator) return;
-
-    fetchColumnCounts(coordinator, 'pca_cluster').then(result => {
-      setClusterCount(result);
-    });
-
-    fetchGeneCols(coordinator).then(result => {
-      if (result && result.length > 0) {
-        setGene(result[0]);
-        setGene2(result[1]);
-        setGeneOptions(result.map((gene: string) => {
-          return({value: gene, label: gene.replace('gene_', '')})
-        }))
-      }
-    })
-  }, []);
-  
-  useEffect(() => {
-    const geneClient = fetchExpressionRates(coordinator, $allFilter, geneOptions, setGeneExpressionRates);
-    return () => geneClient.destroy();
-  }, [geneOptions.length > 0]);
-  
-  useEffect(() => {
-    const client = fetchColumnCountsFilter(coordinator, $allFilter, 'cluster', setSelectionSummary);
-    return () => client.destroy();
-  }, [umapFill, gene, gene2, containerWidth, geneComparisonMode]);
-
-  const $legendBrush = useRef(vg.Selection.intersect({ cross: true })).current;
+  const $legendBrush = useRef(vg.Selection.crossfilter()).current;
   const $umapBrush = useRef(vg.Selection.intersect()).current;
   
   const $nFeatureBrush = useRef(vg.Selection.intersect()).current;
@@ -118,7 +101,202 @@ const Plots = () => {
     ? $percentMTBrush.value as [number, number]
     : null;
 
-  useEffect(() => { // Reset all brushes when the category changes
+  const plotUMAP = async () => {
+    const umapWidth = containerWidth;
+    const umapHeight = umapWidth * 11/16;
+
+    const umapArgs = [
+      vg.dot(vg.from('cells', {}), {
+        x: 'UMAP_1',
+        y: 'UMAP_2',
+        fill: umapCategory.fillValue,
+        r: 1.5,
+        opacity: 0.44,
+        tip: { format: { x: false, y: false, fill: false } },
+        title: 'cluster'
+      }),
+      vg.name('umap'),
+      vg.intervalXY({ as: $umapBrush, brush: { fill: 'none', stroke: '#888' } }),
+      vg.highlight({ by: $allFilter, fill: umapFill === 'excluded' ? 'red' : '#ccc', fillOpacity: umapFill === 'excluded' ? 0.3 : 0.2 }),
+      vg.xLabel('UMAP Dimension 1'),
+      vg.yLabel('UMAP Dimension 2'),
+      vg.width(umapWidth),
+      vg.height(umapHeight),
+    ];
+
+    if (umapCategory.colorScale) {
+      umapArgs.push(vg.colorScale(umapCategory.colorScale));
+    }
+    if (umapCategory.colorRange) {
+      umapArgs.push(vg.colorRange(umapCategory.colorRange));
+    }
+    if (umapCategory.colorDomain) {
+      umapArgs.push(vg.colorDomain(umapCategory.colorDomain));
+    }
+    if (umapCategory.colorScheme) {
+      umapArgs.push(vg.colorScheme(umapCategory.colorScheme));
+    }
+    if (umapCategory.colorReverse) {
+      umapArgs.push(vg.colorReverse(umapCategory.colorReverse));
+    }
+
+    const umap = vg.plot(...umapArgs);
+    if (umapRef.current) {
+      umapRef.current.replaceChildren(umap);
+    }
+
+    const umapLegend = vg.colorLegend({ 
+      for: 'umap',
+      as: umapFill === 'excluded' ? null : $legendBrush, 
+      columns: 1, 
+      label: umapCategory.legendTitle ? umapCategory.legendTitle : umapCategory.title
+    });
+    if (umapLegendRef.current) {
+      umapLegendRef.current.replaceChildren(umapLegend);
+    }
+  };
+
+  const plotQC = async () => {
+    const nFeature = vg.plot(
+      vg.densityY(vg.from('cells', { filterBy: $densityFilter }), {
+        x: 'nFeature_RNA',
+        fill: 'sample',
+        opacity: 0.5,
+        tip: true,
+        title: 'sample',
+        normalize: 'max',
+      }),
+      vg.colorRange(tableau20),
+      vg.colorDomain(samples),
+      vg.intervalX({ as: $nFeatureBrush }),
+      vg.xLabel(umapCategories.nFeature_RNA.title),
+      vg.yAxis(null),
+      vg.width(containerWidth),
+      vg.height(88),
+    );
+    if (nFeatureRef.current) {
+      nFeatureRef.current.replaceChildren(nFeature);
+    }
+
+    const nCount = vg.plot(
+      vg.densityY(vg.from('cells', { filterBy: $densityFilter }), {
+        x: 'nCount_RNA',
+        fill: 'sample',
+        opacity: 0.5,
+        tip: true,
+        title: 'sample',
+        normalize: 'max',
+      }),
+      vg.colorRange(tableau20),
+      vg.colorDomain(samples),
+      vg.intervalX({ as: $nCountBrush }),
+      vg.xLabel(umapCategories.nCount_RNA.title),
+      vg.yAxis(null),
+      vg.width(containerWidth),
+      vg.height(88),
+    );
+    if (nCountRef.current) {
+      nCountRef.current.replaceChildren(nCount);
+    }
+
+    const percentMT = vg.plot(
+      vg.densityY(vg.from('cells', { filterBy: $densityFilter }), {
+        x: 'percent_mt',
+        fill: 'sample',
+        opacity: 0.25,
+        tip: true,
+        title: 'sample',
+        normalize: 'max',
+      }),
+      vg.colorRange(tableau20),
+      vg.colorDomain(samples),
+      vg.intervalX({ as: $percentMTBrush }),
+      vg.xLabel(umapCategories.percent_mt.title),
+      vg.yAxis(null),
+      vg.width(containerWidth),
+      vg.height(88),
+    );
+    if (percentMTRef.current) {
+      percentMTRef.current.replaceChildren(percentMT);
+    }
+  };
+
+  const plotSaturation = async () => {
+    const featureCurve = vg.plot(
+      vg.line(vg.from('cells', { filterBy: $saturationFilter }), {
+        x: vg.sql`ROW_NUMBER() OVER (ORDER BY nFeature_RNA)`,
+        y: 'nFeature_RNA',
+        stroke: 'gray',
+        strokeWidth: 3,
+        opacity: 0.5,
+        tip: false
+      }),
+      vg.intervalY({ as: $featureCurveBrush }),
+      vg.xLabel('Cell Count'),
+      vg.yLabel(umapCategories.nFeature_RNA.title),
+      vg.width(containerWidth),
+      vg.height(255),
+    );
+    if (featureCurveRef.current) {
+      featureCurveRef.current.replaceChildren(featureCurve);
+    }
+
+    const featureUMICurve = vg.plot(
+      vg.dot(vg.from('cells', { filterBy: $saturationFilter }), {
+        x: 'nCount_RNA',
+        y: 'nFeature_RNA',
+        r: 2.5,
+        fill: 'gray', 
+        opacity: 0.25,
+        tip: false
+      }),
+      // vg.colorScheme('magma'),
+      vg.colorRange(tableau20),
+      vg.colorDomain(samples),
+      vg.intervalXY({ as: $featureUMICurveBrush }),
+      vg.xLabel(umapCategories.nCount_RNA.title),
+      vg.yLabel(umapCategories.nFeature_RNA.title),
+      vg.width(containerWidth),
+      vg.height(255),
+    );
+    if (featureUMICurveRef.current) {
+      featureUMICurveRef.current.replaceChildren(featureUMICurve);
+    }
+  };
+
+  useEffect(() => { // get number of pca clusters and arrays of unique cell types, samples, gene columns
+    if (!coordinator) return;
+    fetchColumnCounts(coordinator, 'pca_cluster').then(result => setClusterCount(result));
+    fetchColumnValues(coordinator, 'cluster').then(result => setCellTypes(result));
+    fetchColumnValues(coordinator, 'sample').then(result => setSamples(result));
+    fetchGeneCols(coordinator).then(result => {
+      if (result && result.length > 0) {
+        setGene(result[0]);
+        setGene2(result[1]);
+        setGenes(result);
+      }
+    })
+  }, []);
+  
+  useEffect(() => { // set top expressed genes in selection
+    if (!showGeneExpr || genes.length === 0) return;
+    const geneClient = fetchExpressionRates(coordinator, $allFilter, genes, setGeneExpressionRates);
+    return () => geneClient.destroy();
+  }, [genes, showGeneExpr]);
+
+  useEffect(() => { // set cell type counts in selection
+    if (!showCellTypeCount) return;
+    const client = fetchColumnCountsFilter(coordinator, $allFilter, 'cluster', cellTypes, setSelectedCellTypeCounts);
+    return () => client.destroy()
+  }, [cellTypes, showCellTypeCount]);
+
+  useEffect(() => { // set sample counts in selection
+    if (!showSampleCount) return;
+    const client = fetchColumnCountsFilter(coordinator, $allFilter, 'sample', samples, setSelectedSampleCounts);
+    return () => client.destroy()
+  }, [samples, showSampleCount]);
+
+  useEffect(() => { // reset all brushes when the category changes
     $nFeatureBrush.reset();
     $nCountBrush.reset();
     $percentMTBrush.reset();
@@ -128,152 +306,32 @@ const Plots = () => {
     $legendBrush.reset();
   }, [umapFill, gene, gene2, geneComparisonMode]);
 
-  useEffect(() => { // draws vgplots
-    const createChart = async () => {
-
-      const umapWidth = containerWidth;
-      const umapHeight = umapWidth * 9/13;
-
-      const umapArgs = [
-        vg.dot(vg.from('cells', {}), {
-          x: 'UMAP_1',
-          y: 'UMAP_2',
-          fill: umapCategory.fillValue,
-          r: 1.5,
-          opacity: 0.44,
-          tip: { format: { x: false, y: false, fill: false } },
-          title: 'cluster'
-        }),
-        vg.name('umap'),
-        vg.intervalXY({ as: $umapBrush, brush: { fill: 'none', stroke: '#888' } }),
-        vg.highlight({ by: $allFilter, fill: umapFill === 'excluded' ? 'red' : '#ccc', fillOpacity: umapFill === 'excluded' ? 0.3 : 0.2 }),
-        vg.xLabel('UMAP Dimension 1'),
-        vg.yLabel('UMAP Dimension 2'),
-        vg.width(umapWidth),
-        vg.height(umapHeight),
-      ];
-
-      if (umapCategory.colorScale) {
-        umapArgs.push(vg.colorScale(umapCategory.colorScale));
-      }
-      if (umapCategory.colorRange) {
-        umapArgs.push(vg.colorRange(umapCategory.colorRange));
-      }
-      if (umapCategory.colorDomain) {
-        umapArgs.push(vg.colorDomain(umapCategory.colorDomain));
-      }
-      if (umapCategory.colorScheme) {
-        umapArgs.push(vg.colorScheme(umapCategory.colorScheme));
-      }
-      if (umapCategory.colorReverse) {
-        umapArgs.push(vg.colorReverse(umapCategory.colorReverse));
-      }
-
-      const umap = vg.plot(...umapArgs);
-      if (umapRef.current) {
-        umapRef.current.replaceChildren(umap);
-      }
-
-      const umapLegend = vg.colorLegend({ 
-        for: 'umap',
-        as: umapFill === 'excluded' ? null : $legendBrush, 
-        columns: 1, 
-        label: umapCategory.legendTitle ? umapCategory.legendTitle : umapCategory.title
-      });
-      if (umapLegendRef.current) {
-        umapLegendRef.current.replaceChildren(umapLegend);
-      }
-
-      const featureCurve = vg.plot(
-        vg.line(vg.from('cells', { filterBy: $saturationFilter }), {
-          x: vg.sql`ROW_NUMBER() OVER (ORDER BY nFeature_RNA)`,
-          y: 'nFeature_RNA',
-          stroke: 'gray',
-          strokeWidth: 3,
-          opacity: 0.5,
-          tip: false,
-        }),
-        vg.intervalY({ as: $featureCurveBrush }),
-        vg.xLabel('Cell Count'),
-        vg.yLabel(umapCategories.nFeature_RNA.title),
-        vg.width(umapWidth),
-        vg.height(255),
-      );
-      if (featureCurveRef.current) {
-        featureCurveRef.current.replaceChildren(featureCurve);
-      }
-
-      const featureUMICurve = vg.plot(
-        vg.dot(vg.from('cells', { filterBy: $saturationFilter }), {
-          x: 'nCount_RNA',
-          y: 'nFeature_RNA',
-          r: 2.5,
-          fill: 'gray', 
-          opacity: 0.3,
-          tip: false,
-        }),
-        vg.colorScheme('magma'),
-        vg.intervalXY({ as: $featureUMICurveBrush }),
-        vg.xLabel(umapCategories.nCount_RNA.title),
-        vg.yLabel(umapCategories.nFeature_RNA.title),
-        vg.width(umapWidth),
-        vg.height(255),
-      );
-      if (featureUMICurveRef.current) {
-        featureUMICurveRef.current.replaceChildren(featureUMICurve);
-      }
-
-      const nFeature = vg.plot(
-        vg.densityY(vg.from('cells', { filterBy: $densityFilter }), {
-          x: 'nFeature_RNA',
-          opacity: 0.5,
-          tip: false,
-        }),
-        vg.intervalX({ as: $nFeatureBrush }),
-        vg.xLabel(umapCategories.nFeature_RNA.title),
-        vg.yAxis(null),
-        vg.width(umapWidth),
-        vg.height(88),
-      );
-      if (nFeatureRef.current) {
-        nFeatureRef.current.replaceChildren(nFeature);
-      }
-
-      const nCount = vg.plot(
-        vg.densityY(vg.from('cells', { filterBy: $densityFilter }), {
-          x: 'nCount_RNA',
-          opacity: 0.5,
-          tip: false,
-        }),
-        vg.intervalX({ as: $nCountBrush }),
-        vg.xLabel(umapCategories.nCount_RNA.title),
-        vg.yAxis(null),
-        vg.width(umapWidth),
-        vg.height(88),
-      );
-      if (nCountRef.current) {
-        nCountRef.current.replaceChildren(nCount);
-      }
-
-      const percentMT = vg.plot(
-        vg.densityY(vg.from('cells', { filterBy: $densityFilter }), {
-          x: 'percent_mt',
-          opacity: 0.5,
-          tip: false,
-        }),
-        vg.intervalX({ as: $percentMTBrush }),
-        vg.xLabel(umapCategories.percent_mt.title),
-        vg.yAxis(null),
-        vg.width(umapWidth),
-        vg.height(88),
-      );
-      if (percentMTRef.current) {
-        percentMTRef.current.replaceChildren(percentMT);
-      }
-    };
-
-    createChart();
+  useEffect(() => { // plot umap if any dependencies change
+    plotUMAP();
   }, [umapFill, gene, gene2, containerWidth, geneComparisonMode]);
+
+  useEffect(() => { // plot qc if any dependences change
+    if (!showQCDist) return;
+    plotQC();
+  }, [samples, showQCDist]);
+
+  useEffect(() => { // plot saturation if any dependencies change
+    if (!showSaturation) return;
+    plotSaturation();
+  }, [samples, showSaturation]);
+
+  useEffect(() => { // container width watcher
+    const cardBody = umapRef.current?.parentElement;
+    if (!cardBody) return;
+    
+    const resizeObserver = new ResizeObserver(entries => {
+      const width = entries[0].contentRect.width;
+      setContainerWidth(width || 800);
+    });
+    
+    resizeObserver.observe(cardBody);
+    return () => resizeObserver.disconnect();
+  }, []);
 
   return (
     <div className='row'>
@@ -307,60 +365,98 @@ const Plots = () => {
         </div>
 
         <div className='card mb-3 shadow-sm'>
-          <div className='card-header text-ss d-flex justify-content-between align-items-end'>
-            <span className='fw-bold'>QC Distribution</span>
+          <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
+            <span className='fw-bold'>Normalized Sample QC Distributions</span>
+            <a 
+              className='text-black fs-5 ms-auto cursor-pointer stretched-link'
+              onClick={() => {
+                if (showQCDist) { // reset brushes on hide only
+                  handleReset();
+                }
+                setShowQCDist(!showQCDist)
+              }}
+              type='button'
+              data-bs-toggle='collapse'
+              data-bs-target='#collapseQCDist'
+              aria-expanded={showQCDist}
+              aria-controls='collapseQCDist'
+            >
+              {showQCDist ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
+            </a>
           </div>
-          <div className='card-body pt-1 px-0'>
-            <div className='d-flex flex-row justify-content-between align-items-center border-bottom py-2'>
-              <div className='flex-grow-1' style={{marginLeft: '-.75rem', marginRight: '2rem'}} ref={nFeatureRef}></div>
-              <div className='me-3 text-center' style={{width: '80px'}}>
-                <p className='text-xs mb-0'>
-                  <strong>Max: </strong>
-                  {nFeatureValues ? nFeatureValues[1].toFixed(1) : 'Inf'}
-                </p>
-                <p className='text-xs mb-0'>
-                  <strong>Min: </strong>
-                  {nFeatureValues ? nFeatureValues[0].toFixed(1) : '0'}
-                </p>
+          <div id='collapseQCDist' className='collapse'>
+            <div className='card-body pt-1 px-0'>
+              <div className='d-flex flex-row justify-content-between align-items-center border-bottom py-2'>
+                <div className='flex-grow-1' style={{marginLeft: '-.75rem', marginRight: '2rem'}} ref={nFeatureRef}></div>
+                <div className='me-3 text-center' style={{width: '80px'}}>
+                  <p className='text-xs mb-0'>
+                    <p className='text-xs mb-0 fw-medium'>{umapCategories.nFeature_RNA.title}</p>
+                    <strong>Max: </strong>
+                    {nFeatureValues ? nFeatureValues[1].toFixed(1) : 'Inf'}
+                  </p>
+                  <p className='text-xs mb-0'>
+                    <strong>Min: </strong>
+                    {nFeatureValues ? nFeatureValues[0].toFixed(1) : '0'}
+                  </p>
+                </div>
+              </div>
+              <div className='d-flex flex-row justify-content-between align-items-center border-bottom py-2'>
+                <div className='flex-grow-1' style={{marginLeft: '-0.75rem', marginRight: '2rem'}} ref={nCountRef}></div>
+                <div className='me-3 text-center' style={{width: '80px'}}>
+                  <p className='text-xs mb-0 fw-medium'>{umapCategories.nCount_RNA.title}</p>
+                  <p className='text-xs mb-0'>
+                    <strong>Max: </strong>
+                    {nCountValues ? nCountValues[1].toFixed(1) : 'Inf'}
+                  </p>
+                  <p className='text-xs mb-0'>
+                    <strong>Min: </strong>
+                    {nCountValues ? nCountValues[0].toFixed(1) : '0'}
+                  </p>
+                </div>
+              </div>
+              <div className='d-flex flex-row justify-content-between align-items-center pt-2'>
+                <div className='flex-grow-1' style={{marginLeft: '-0.75rem', marginRight: '2rem'}} ref={percentMTRef}></div>
+                <div className='me-3 text-center' style={{width: '80px'}}>
+                  <p className='text-xs mb-0 fw-medium'>{umapCategories.percent_mt.title}</p>
+                  <p className='text-xs mb-0'>
+                    <strong>Max: </strong>
+                    {percentMTValues ? percentMTValues[1].toFixed(1) : 'Inf'}
+                  </p>
+                  <p className='text-xs mb-0'>
+                    <strong>Min: </strong>
+                    {percentMTValues ? percentMTValues[0].toFixed(1) : '0'}
+                  </p>
+                </div>
               </div>
             </div>
-            <div className='d-flex flex-row justify-content-between align-items-center border-bottom py-2'>
-              <div className='flex-grow-1' style={{marginLeft: '-0.75rem', marginRight: '2rem'}} ref={nCountRef}></div>
-              <div className='me-3 text-center' style={{width: '80px'}}>
-                <p className='text-xs mb-0'>
-                  <strong>Max: </strong>
-                  {nCountValues ? nCountValues[1].toFixed(1) : 'Inf'}
-                </p>
-                <p className='text-xs mb-0'>
-                  <strong>Min: </strong>
-                  {nCountValues ? nCountValues[0].toFixed(1) : '0'}
-                </p>
-              </div>
-            </div>
-            <div className='d-flex flex-row justify-content-between align-items-center pt-2'>
-              <div className='flex-grow-1' style={{marginLeft: '-0.75rem', marginRight: '2rem'}} ref={percentMTRef}></div>
-              <div className='me-3 text-center' style={{width: '80px'}}>
-                <p className='text-xs mb-0'>
-                  <strong>Max: </strong>
-                  {percentMTValues ? percentMTValues[1].toFixed(1) : 'Inf'}
-                </p>
-                <p className='text-xs mb-0'>
-                  <strong>Min: </strong>
-                  {percentMTValues ? percentMTValues[0].toFixed(1) : '0'}
-                </p>
-              </div>
-            </div>
-
           </div>
         </div>
 
         <div className='card mb-3 shadow-sm'>
-          <div className='card-header text-ss d-flex justify-content-between align-items-end'>
+          <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
             <span className='fw-bold'>Saturation Curves</span>
+            <a 
+              className='text-black fs-5 ms-auto cursor-pointer stretched-link'
+              onClick={() => {
+                if (showSaturation) { // reset brushes on hide only
+                  handleReset();
+                }
+                setShowSaturation(!showSaturation)
+              }}
+              type='button'
+              data-bs-toggle='collapse'
+              data-bs-target='#collapseSaturation'
+              aria-expanded={showSaturation}
+              aria-controls='collapseSaturation'
+            >
+              {showSaturation ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
+            </a>
           </div>
-          <div className='card-body px-0'>
-            <div className='px-3 pb-3 border-bottom' ref={featureCurveRef}></div>
-            <div className='px-3 pt-3' ref={featureUMICurveRef}></div>
+          <div id='collapseSaturation' className='collapse'>
+            <div className='card-body px-0'>
+              <div className='px-3 pb-3 border-bottom' ref={featureCurveRef}></div>
+              <div className='px-3 pt-3' ref={featureUMICurveRef}></div>
+            </div>
           </div>
         </div>
       
@@ -369,10 +465,22 @@ const Plots = () => {
       <div className='col-3 px-0'>
 
         <div className='card mt-0 mb-3 shadow-sm'>
-          <div className='card-header text-ss d-flex justify-content-between align-items-end'>
+          <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
             <span className='fw-bold'>Settings</span>
+            <a 
+              className='text-black fs-5 ms-auto cursor-pointer stretched-link'
+              onClick={() => setShowSettings(!showSettings)}
+              type='button'
+              data-bs-toggle='collapse'
+              data-bs-target='#collapseSettings'
+              aria-expanded={showSettings}
+              aria-controls='collapseSettings'
+            >
+              {showSettings ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
+            </a>
           </div>
-          <div className='card-body'>
+          <div id='collapseSettings' className='collapse show'>
+            <div className='card-body'>
             <p className='text-ss mb-0 fw-bold'>Fill</p>
             <select 
               className='form-select form-select-sm'
@@ -402,92 +510,159 @@ const Plots = () => {
             {umapFill === 'genes' && (
               <>
                 <p className='text-ss mt-3 mb-0 fw-bold'>Gene 2</p>
-                <Select 
-                  options={geneOptions} 
-                  value={{value: gene2, label: gene2.replace('gene_', '')}} 
-                  onChange={(selectedOption) => setGene2(selectedOption?.value || '')}
-                  isSearchable
-                  styles={bootstrapSelectStyles}
-                />
+                  <Select 
+                    options={geneOptions} 
+                    value={{value: gene2, label: gene2.replace('gene_', '')}} 
+                    onChange={(selectedOption) => setGene2(selectedOption?.value || '')}
+                    isSearchable
+                    styles={bootstrapSelectStyles}
+                  />
 
-                <p className='text-ss mt-3 mb-0 fw-bold'>Gene Comparison</p>
-                <select 
-                  className='form-select form-select-sm'
-                  value={geneComparisonMode}
-                  onChange={(e) => setGeneComparisonMode(e.target.value)}
-                >
-                  <option value='categorical'>Categorical</option>
-                  <option value='addition'>Simple Addition</option>
-                  <option value='geometric'>Geometric Mean</option>
-                  <option value='logfold'>Log Fold Change</option>
-                </select>
-              </>
-            )}
+                  <p className='text-ss mt-3 mb-0 fw-bold'>Gene Comparison</p>
+                  <select 
+                    className='form-select form-select-sm'
+                    value={geneComparisonMode}
+                    onChange={(e) => setGeneComparisonMode(e.target.value)}
+                  >
+                    <option value='categorical'>Categorical</option>
+                    <option value='addition'>Simple Addition</option>
+                    <option value='geometric'>Geometric Mean</option>
+                    <option value='logfold'>Log Fold Change</option>
+                  </select>
+                </>
+              )}
 
-            <p className='text-ss mt-3 mb-0 fw-bold'>Legend Position</p>
-            <select 
-              className='form-select form-select-sm'
-              aria-label='legendPosition'
-              value={legendPosition}
-              onChange={(e) => setLegendPosition(e.target.value)}
+              <p className='text-ss mt-3 mb-0 fw-bold'>Legend Position</p>
+              <select 
+                className='form-select form-select-sm'
+                aria-label='legendPosition'
+                value={legendPosition}
+                onChange={(e) => setLegendPosition(e.target.value)}
+              >
+                <option value='topright'>Top Right</option>
+                <option value='bottomright'>Bottom Right</option>
+                <option value='off'>Hidden</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className='card mb-3 shadow-sm'>
+          <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
+            <span className='fw-bold'>Cell Type Counts</span>
+            <a 
+              className='text-black fs-5 ms-auto cursor-pointer stretched-link'
+              onClick={() => setShowCellTypeCount(!showCellTypeCount)}
+              type='button'
+              data-bs-toggle='collapse'
+              data-bs-target='#collapseCellTypeCount'
+              aria-expanded={showCellTypeCount}
+              aria-controls='collapseCellTypeCount'
             >
-              <option value='topright'>Top Right</option>
-              <option value='bottomright'>Bottom Right</option>
-              <option value='off'>Hidden</option>
-            </select>
-
+              {showCellTypeCount ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
+            </a>
           </div>
-        </div>
-
-        <div className='card mb-3 shadow-sm'>
-          <div className='card-header text-ss d-flex justify-content-between align-items-end'>
-            <span className='fw-bold'>Counts</span>
-          </div>
-          <div className='card-body p-0'>
-            <table className='table table-striped table-rounded text-xs'>
-              <thead>
-                <tr>
-                  <th>Cell Type</th>
-                  <th>Selected Count</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className='fst-italic fw-medium'>Total</td>
-                  <td className='fst-italic fw-medium'>{selectionSummary.filteredCells}</td>
-                </tr>
-                {Object.keys(selectionSummary.clusterCounts).map((cluster: string, index: number) => (
-                  <tr key={index}>
-                    <td>{cluster}</td>
-                    <td>{String(Object.values(selectionSummary.clusterCounts)[index])}</td>
+          <div id='collapseCellTypeCount' className='collapse show'>
+            <div className='card-body p-0'>
+              <table className='table table-striped table-rounded text-xs'>
+                <thead>
+                  <tr>
+                    <th>Cell Type</th>
+                    <th>Selected Count</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className='fst-italic fw-medium'>Total</td>
+                    <td className='fst-italic fw-medium'>{selectedCellTypeCounts.filteredCells}</td>
+                  </tr>
+                  {Object.keys(selectedCellTypeCounts.cellCounts).map((cluster: string, index: number) => (
+                    <tr key={index}>
+                      <td>{cluster}</td>
+                      <td>{String(Object.values(selectedCellTypeCounts.cellCounts)[index])}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
         <div className='card mb-3 shadow-sm'>
-          <div className='card-header text-ss d-flex justify-content-between align-items-end'>
+          <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
+            <span className='fw-bold'>Sample Counts</span>
+            <a 
+              className='text-black fs-5 ms-auto cursor-pointer stretched-link'
+              onClick={() => setShowSampleCount(!showSampleCount)}
+              type='button'
+              data-bs-toggle='collapse'
+              data-bs-target='#collapseSampleCount'
+              aria-expanded={showSampleCount}
+              aria-controls='collapseSampleCount'
+            >
+              {showSampleCount ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
+            </a>
+          </div>
+          <div id='collapseSampleCount' className='collapse show'>
+            <div className='card-body p-0'>
+              <table className='table table-striped table-rounded text-xs'>
+                <thead>
+                  <tr>
+                    <th>Sample</th>
+                    <th>Selected Count</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className='fst-italic fw-medium'>Total</td>
+                    <td className='fst-italic fw-medium'>{selectedSampleCounts.filteredCells}</td>
+                  </tr>
+                  {Object.keys(selectedSampleCounts.cellCounts).map((cluster: string, index: number) => (
+                    <tr key={index}>
+                      <td>{cluster}</td>
+                      <td>{String(Object.values(selectedSampleCounts.cellCounts)[index])}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div className='card mb-3 shadow-sm'>
+          <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
             <span className='fw-bold'>Most Expressed Genes</span>
+            <a 
+              className='text-black fs-5 ms-auto cursor-pointer stretched-link'
+              onClick={() => setShowGeneExpr(!showGeneExpr)}
+              type='button'
+              data-bs-toggle='collapse'
+              data-bs-target='#collapseGeneExpr'
+              aria-expanded={showGeneExpr}
+              aria-controls='collapseGeneExpr'
+            >
+              {showGeneExpr ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
+            </a>
           </div>
-          <div className='card-body p-0'>
-            <table className='table table-striped table-rounded text-xs'>
-              <thead>
-                <tr>
-                  <th>Gene</th>
-                  <th>Expression Rate</th>
-                </tr>
-              </thead>
-              <tbody>
-                {geneExpressionRates.map((item, index) => (
-                  <tr key={index}>
-                    <td>{item.gene}</td>
-                    <td>{item.expressionRate.toFixed(2)}%</td>
+          <div id='collapseGeneExpr' className='collapse'>
+            <div className='card-body p-0'>
+              <table className='table table-striped table-rounded text-xs'>
+                <thead>
+                  <tr>
+                    <th>Gene</th>
+                    <th>Expression Rate</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {geneExpressionRates.map((item, index) => (
+                    <tr key={index}>
+                      <td>{item.gene}</td>
+                      <td>{item.expressionRate.toFixed(2)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
