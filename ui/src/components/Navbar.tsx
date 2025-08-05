@@ -41,7 +41,7 @@ const NavLink = (props: NavLinkProps) => {
 };
 
 function Navbar() {
-  const location = useLocation().pathname.substring(1) || 'summary';
+  const location = useLocation().pathname.substring(1) || 'overview';
   const [titleText, setTitleText] = useState('Tessera');
 
   return (
@@ -53,8 +53,8 @@ function Navbar() {
               <Link to='' className='text-decoration-none text-dark mx-auto'>
                 <h5 
                   className='fst-condensed mt-2 fw-light m-0' 
-                  onMouseEnter={() => setTitleText('Tes[seurat]')}
-                  onMouseLeave={() => setTitleText('Tessera')}
+                  // onMouseEnter={() => setTitleText('Tes[seurat]')}
+                  // onMouseLeave={() => setTitleText('Tessera')}
                 >
                   {titleText}
                 </h5>
@@ -64,14 +64,20 @@ function Navbar() {
               <p className='fst-condensed mt-4 mb-0'>Views</p>
               <div className=''>
                 <NavLink
-                  page={'summary'}
+                  page={'overview'}
                   title={'Overview'}
                   position='side'
                   currentPage={location}
                 />
                 <NavLink
-                  page={'details'}
+                  page={'projections'}
                   title={'Projections'}
+                  position='side'
+                  currentPage={location}
+                />
+                <NavLink
+                  page={'comparisons'}
+                  title={'Comparisons'}
                   position='side'
                   currentPage={location}
                 />
@@ -82,7 +88,6 @@ function Navbar() {
                   currentPage={location}
                 />
               </div>
-
               <p className='fst-condensed mt-3 mb-0'>Links</p>
               <div className=''>
                 <a

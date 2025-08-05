@@ -120,7 +120,7 @@ const Plots = () => {
         x: 'UMAP_1',
         y: 'UMAP_2',
         fill: umapCategory.fillValue,
-        r: 1.5,
+        r: 1.1,
         opacity: 0.44,
         tip: { format: { x: false, y: false, fill: false } },
         title: 'cluster'
@@ -229,7 +229,7 @@ const Plots = () => {
         x: saturationAPI.sql`ROW_NUMBER() OVER (ORDER BY nFeature_RNA)`,
         y: 'nFeature_RNA',
         stroke: 'gray',
-        strokeWidth: 3,
+        strokeWidth: 2.2,
         opacity: 0.44,
         tip: false
       }),
@@ -245,7 +245,7 @@ const Plots = () => {
       saturationAPI.dot(saturationAPI.from('cells', { filterBy: $saturationFilter }), {
         x: 'nCount_RNA',
         y: 'nFeature_RNA',
-        r: 2.5,
+        r: 2.2,
         fill: 'gray', 
         opacity: 0.25,
         tip: false
@@ -338,12 +338,6 @@ const Plots = () => {
   return (
     <div className='row'>
       <div className='col-9 ps-0 pe-3'>
-
-        <div className='card my-0 py-0' style={{visibility: 'hidden'}}>
-          <div className='card-body my-0 py-0' ref={plotColRef}>
-          </div>
-        </div>
-
         <div className='card mb-3 shadow-sm'>
           <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
             <span className='fw-bold'>UMAP</span>
@@ -485,6 +479,12 @@ const Plots = () => {
               <div className='px-3 pb-3 border-bottom' ref={featureCurveRef}></div>
               <div className='px-3 pt-3' ref={featureUMICurveRef}></div>
             </div>
+          </div>
+        </div>
+
+
+        <div className='card my-0 py-0' style={{visibility: 'hidden'}}>
+          <div className='card-body my-0 py-0' ref={plotColRef}>
           </div>
         </div>
       

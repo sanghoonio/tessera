@@ -9,8 +9,9 @@ import 'bootstrap/dist/js/bootstrap.bundle.js';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 
 import Navbar from './components/Navbar';
-import Details from './components/pages/Details';
-import Summary from './components/pages/Summary';
+import Projections from './components/pages/Projections';
+import Overview from './components/pages/Overview';
+import Comparisons from './components/pages/Comparisons';
 import Config from './components/pages/Config';
 
 const queryClient = new QueryClient();
@@ -25,9 +26,10 @@ function Main() {
             <div className='row'>
               <div className='col-12'>
                 <Routes>
-                  <Route path='/' element={<Summary />} />
-                  <Route path='/summary' element={<Summary />} />
-                  <Route path='/details' element={<Details />} />
+                  <Route path='/' element={<Overview />} />
+                  <Route path='/overview' element={<Overview />} />
+                  <Route path='/projections' element={<Projections />} />
+                  <Route path='/comparisons' element={<Comparisons />} />
                   <Route path='/config' element={<Config />} />
                 </Routes>
               </div>
