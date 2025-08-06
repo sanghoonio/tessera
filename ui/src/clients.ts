@@ -3,18 +3,18 @@ import { makeClient } from "@uwdata/mosaic-core";
 import { Query, count, sum } from "@uwdata/mosaic-sql";
 
 
-export const fetchColumnCounts = async (coordinator: any, column: string) => {
+export const fetchColumnCounts = async (coordinator: any, table: string, column: string) => {
   const result = await coordinator.query(
-    Query.from('cells')
+    Query.from(table)
       .select({ count: count() })
       .groupby(column)
   );
   return result.numRows;
 };
 
-export const fetchColumnValues = async (coordinator: any, column: string) => {
+export const fetchColumnValues = async (coordinator: any, table: string, column: string) => {
   const result = await coordinator.query(
-    Query.from('cells')
+    Query.from(table)
       .select(column)
       .groupby(column)
       .orderby(column)
@@ -26,11 +26,11 @@ export const fetchColumnValues = async (coordinator: any, column: string) => {
   return columns;
 };
 
-export const fetchGeneCols = async (coordinator: any) => {
+export const fetchGeneCols = async (coordinator: any, table: string) => {
   const result = await coordinator.query(
     Query.from('information_schema.columns')
       .select('column_name')
-      .where(`table_name = 'cells' AND column_name LIKE 'gene_%'`)
+      .where(`table_name = '${table}' AND column_name LIKE 'gene_%'`)
       .orderby('column_name')
   );
   const columns = [];
@@ -41,7 +41,8 @@ export const fetchGeneCols = async (coordinator: any) => {
 };
 
 export const fetchExpressionRates = (
-  coordinator: any, 
+  coordinator: any,
+  table: string,
   selection: any,
   genes: string[],
   setGeneExpressionRates: (geneExpressionRates: any) => void
@@ -57,7 +58,7 @@ export const fetchExpressionRates = (
     // Also get total count for calculating expression rate
     countSelects['total_count'] = count();
 
-    let query = Query.from('cells').select(countSelects);
+    let query = Query.from(table).select(countSelects);
     if (predicate) {
       query = query.where(predicate);
     }
@@ -84,7 +85,7 @@ export const fetchExpressionRates = (
         }
       });
 
-      setGeneExpressionRates(geneExpressionRates.sort((a, b) => b.expressionRate - a.expressionRate).slice(0, 15));
+      setGeneExpressionRates(geneExpressionRates.sort((a, b) => b.expressionRate - a.expressionRate).slice(0, 25));
     } catch (error) {
       console.error('Error processing expression rates:', error);
     }
@@ -97,6 +98,7 @@ export const fetchExpressionRates = (
 
 export const fetchColumnCountsFilter = (
   coordinator: any, 
+  table: string,
   selection: any, 
   column: string,
   columnValues: string[],
@@ -105,7 +107,7 @@ export const fetchColumnCountsFilter = (
   coordinator: coordinator,
   selection: selection,
   query: (predicate) => {
-    return Query.from('cells')
+    return Query.from(table)
       .select(column, {count: count()})
       .where(predicate)
       .groupby(column);

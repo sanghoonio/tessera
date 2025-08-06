@@ -15,7 +15,7 @@ export const createUmapCategories = (
   gene: string, 
   gene2: string, 
   geneComparisonMode: string, 
-  clusterCount: number, 
+  // clusterCount: number, 
   cellTypes: string[], 
   samples: string[]
 ) => {
@@ -31,12 +31,13 @@ export const createUmapCategories = (
       colorReverse: null
     },
     'pca_cluster': {
-      title: 'PCA Cluster', 
+      title: 'Seurat Cluster', 
       legendTitle: null, 
       fillValue: 'pca_cluster', 
       colorScale: 'ordinal', 
       colorRange: tableau20,
-      colorDomain: Array.from({length: clusterCount}, (_, i) => i.toString()),
+      // colorDomain: Array.from({length: clusterCount}, (_, i) => i.toString()),
+      colorDomain: null,
       colorScheme: null,
       colorReverse: null
     },

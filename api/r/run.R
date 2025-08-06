@@ -8,8 +8,13 @@ library(data.table)
 source(file.path('R', 'server.R'))
 source(file.path('R', 'query.R'))
 
-data <- fread('data/umap_sample.txt')
+ct <- fread('data/ct_data.txt')
+sc2 <- fread('data/sc2_data.txt')
+sc4 <- fread('data/sc4_data.txt')
+img <- fread('data/korea.txt')
+unique(img$color)
 
+data <- list('ct' = ct, 'sc2' = sc2, 'sc4' = sc4)
 
 # Main function to run the server
 run <- function() {
@@ -43,16 +48,16 @@ run <- function() {
   if (db_path == ':memory:') {
     # cat('Creating table for testing...\n')
     
-    original_names <- colnames(data)
-    clean_names <- clean_sql_names(original_names)
-    colnames(data) <- clean_names
-    
-    gene_columns <- colnames(data)[10:length(colnames(data))]
-    gene_sql <- paste(gene_columns, 'DOUBLE', collapse = ',\n        ')
-    
-    # Build the complete SQL statement
-    query <- paste0('
-      CREATE TABLE cells (
+    for (i in 1:length(data)) {
+      original_names <- colnames(data[[i]])
+      clean_names <- clean_sql_names(original_names)
+      colnames(data[[i]]) <- clean_names
+      
+      gene_columns <- colnames(data[[i]])[10:length(colnames(data[[i]]))]
+      gene_sql <- paste(gene_columns, 'DOUBLE', collapse = ',\n        ')
+      
+      query <- paste0('
+      CREATE TABLE ', names(data)[[i]], ' (
         cell_id VARCHAR,
         cluster VARCHAR,
         pca_cluster VARCHAR,
@@ -66,15 +71,27 @@ run <- function() {
         ', gene_sql, '
       );
     ')
+      
+      dbExecute(con, query)
+      
+      n_cells <- nrow(data[[i]])
+      cells_data <- data[[i]]
+      cells_data$cell_id = 1:n_cells
+      
+      dbWriteTable(con, names(data)[[i]], cells_data, append = FALSE, overwrite = TRUE, row.names = FALSE)
+    }
+    
+    query <- paste0('
+      CREATE TABLE img (
+        x VARCHAR,
+        y VARCHAR,
+        color VARCHAR,
+      );
+    ')
     
     dbExecute(con, query)
+    dbWriteTable(con, 'img', img, append = FALSE, overwrite = TRUE, row.names = FALSE)
     
-    n_cells <- nrow(data)
-    cells_data <- data
-    cells_data$cell_id = 1:n_cells
-
-    dbWriteTable(con, 'cells', cells_data, append = TRUE, row.names = FALSE)
-    # cat('Dummy table created and populated.\n')
   }
   
   # Create a cache

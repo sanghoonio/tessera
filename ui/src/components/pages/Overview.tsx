@@ -1,12 +1,46 @@
-
+// import { useRef, useEffect } from 'react';
+// import * as vg from '@uwdata/vgplot';
 
 
 function Overview() {
+  // const imgRef = useRef<HTMLDivElement>(null);
+
+  // const colors = ["#66695A", "#F6FCFE", "#444C44", "#383F30", "#192216", "#575A46", "#4C4C30", "#8E6E2B", "#7E7967", "#2A3224", "#A58237", "#938A75", "#796A41", "#CC9C52", "#6D5727", "#A8A08B"]
+
+  // const plotImg = async () => {
+  //   const featureCurve = vg.plot(
+  //     vg.voronoi(vg.from('img', {}), {
+  //       x: vg.sql`CAST(x AS NUMERIC)`,
+  //       y: vg.sql`CAST(y AS NUMERIC)`,
+  //       r: 2,
+  //       fill: 'color',
+  //       tip: false
+  //     }),
+  //     vg.name('img'),
+  //     vg.colorRange(colors),
+  //     vg.colorDomain(colors),
+  //     vg.xAxis(null),
+  //     vg.yAxis(null),
+  //     vg.width(5312/9),
+  //     vg.height(2988/9),
+  //   );
+
+  //   if (imgRef.current) imgRef.current.replaceChildren(featureCurve);
+  // };
+
+  // useEffect(() => { // plot saturation if any dependencies change
+  //   plotImg();
+  //   // return () => {
+  //   //   coordinator.clear({ clients: true, cache: true });
+  //   // }
+  // }, []);
+
   return (
     <div className='row p-2 p-lg-4 mt-4 mt-lg-0'>
-      <div className='col-12 p-5 justify-content-center'>
+      <div className='col-12 p-5'>
+        {/* <div className='d-flex justify-content-end' ref={imgRef}></div> */}
         
-        <h4 className='fw-lighter mt-4'>A functional, intuitive, and aesthetic interface for single-cell data</h4>
+        <h4 className='fw-lighter'>A functional, intuitive, and aesthetic interface for single-cell data</h4>
 
         <h6 className='fw-bold mt-4'>Real-time multimodal analysis</h6>
         <p>
@@ -25,7 +59,7 @@ function Overview() {
           <li>likely many more, but a little annoying to describe in words</li>
         </ul>
         
-        <h6 className='fw-bold'>Declarative specifications and extensible views</h6>
+        <h6 className='fw-bold mt-4'>Declarative specifications and extensible views</h6>
         <p>
           Underlying Mosaic is vgplot, a declarative grammar-based graphics library inspired by Vega-Lite (written by the same authors) and rendered as SVG through Observable Plot. 
           Plot specifications are defined in JSON or YAML with a concise syntax that is easy to understand, distribute, and convert to other declarative grammars such as Vega-Lite and ggplot2. 
@@ -39,7 +73,7 @@ function Overview() {
           Even if Tessera infrastructure becomes unavailable, the declarative nature of these schemas can allow them to be converted to or exported as other grammars that can be rendered elsewhere like in Jupyter Notebooks.
         </p>
 
-        <h6 className='fw-bold'>Flexibility across platforms</h6>
+        <h6 className='fw-bold mt-4'>Flexibility across platforms</h6>
         <p>
           Mosaic processes its data and interactions through a database backing, usually DuckDB. 
           DuckDB is portable and supports a wide variety of platforms, including Python, R, Node.js, Rust, Go, and even WebAssembly. 
@@ -104,7 +138,7 @@ function Overview() {
           <li>determine whether it is possible for a selection query from the UMAP to update a volcano plot for differential gene expression between selected and background cells in real time</li>
         </ul>
 
-        <h6 className='fw-bold mt-3'>Backend</h6>
+        <h6 className='fw-bold'>Backend</h6>
         <ul>
           <li>explore what the most suitable implementation of a DuckDB websocket server might be for Mosaic queries</li>
           <li>determine what kind of analyses might be doable through DuckDB queries, and how much preprocessing various input data would generally require before you can drop them into Mosaic plots and run standard SQL queries on them</li>

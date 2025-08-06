@@ -3,9 +3,12 @@ import Select from 'react-select'
 import * as vg from '@uwdata/vgplot';
 
 import { createUmapCategories, bootstrapSelectStyles, tableau20 } from '../utils';
-import { fetchColumnCounts, fetchGeneCols, fetchColumnValues, fetchExpressionRates, fetchColumnCountsFilter } from '../clients';
+import { fetchGeneCols, fetchColumnValues, fetchExpressionRates, fetchColumnCountsFilter } from '../clients';
+import { useTableStore } from '../stores/config';
 
 const Plots = () => {
+  const { table } = useTableStore();
+
   const plotColRef = useRef<HTMLDivElement>(null);
   const umapLegendRef = useRef<HTMLDivElement>(null);
   const umapRef = useRef<HTMLDivElement>(null);
@@ -15,19 +18,20 @@ const Plots = () => {
   const nCountRef = useRef<HTMLDivElement>(null);
   const percentMTRef = useRef<HTMLDivElement>(null);
   const sampleLegendRef = useRef<HTMLDivElement>(null);
+  const sampleSaturationLegendRef = useRef<HTMLDivElement>(null);
 
   const [showUMAP, setShowUMAP] = useState(true);
-  const [showQCDist, setShowQCDist] = useState(false);
+  const [showQCDist, setShowQCDist] = useState(true);
   const [showSaturation, setShowSaturation] = useState(false);
   const [showSettings, setShowSettings] = useState(true);
   const [showCellTypeCount, setShowCellTypeCount] = useState(true);
-  const [showSampleCount, setShowSampleCount] = useState(false);
+  const [showSampleCount, setShowSampleCount] = useState(true);
   const [showGeneExpr, setShowGeneExpr] = useState(false);
 
   const [umapFill, setUmapFill] = useState('cluster');
   const [containerWidth, setContainerWidth] = useState(800);
   const [legendPosition, setLegendPosition] = useState('topright');
-  const [clusterCount, setClusterCount] = useState(0);
+  // const [clusterCount, setClusterCount] = useState(0);
   const [cellTypes, setCellTypes] = useState<string[]>([]);
   const [samples, setSamples] = useState<string[]>([]);
 
@@ -57,8 +61,8 @@ const Plots = () => {
   );
 
   const umapCategories = useMemo(() => 
-    createUmapCategories(gene, gene2, geneComparisonMode, clusterCount, cellTypes, samples),
-    [gene, gene2, geneComparisonMode, clusterCount, cellTypes, samples]
+    createUmapCategories(gene, gene2, geneComparisonMode, cellTypes, samples),
+    [gene, gene2, geneComparisonMode, cellTypes, samples]
   );
   const umapCategory = umapCategories[umapFill as keyof typeof umapCategories];
 
@@ -116,11 +120,11 @@ const Plots = () => {
     const umapHeight = umapWidth * 11/16;
 
     const umapArgs = [
-      umapAPI.dot(umapAPI.from('cells', {}), {
+      umapAPI.dot(umapAPI.from(table, {}), {
         x: 'UMAP_1',
         y: 'UMAP_2',
         fill: umapCategory.fillValue,
-        r: 1.1,
+        r: 1.3,
         opacity: 0.44,
         tip: { format: { x: false, y: false, fill: false } },
         title: 'cluster'
@@ -159,7 +163,7 @@ const Plots = () => {
 
   const plotQC = async () => {
     const nFeature = qcAPI.plot(
-      qcAPI.densityY(qcAPI.from('cells', { filterBy: $densityFilter }), {
+      qcAPI.densityY(qcAPI.from(table, { filterBy: $densityFilter }), {
         x: 'nFeature_RNA',
         fill: 'sample',
         opacity: 0.5,
@@ -177,7 +181,7 @@ const Plots = () => {
     );
 
     const nCount = qcAPI.plot(
-      qcAPI.densityY(qcAPI.from('cells', { filterBy: $densityFilter }), {
+      qcAPI.densityY(qcAPI.from(table, { filterBy: $densityFilter }), {
         x: 'nCount_RNA',
         fill: 'sample',
         opacity: 0.44,
@@ -195,7 +199,7 @@ const Plots = () => {
     );
 
     const percentMT = qcAPI.plot(
-      qcAPI.densityY(qcAPI.from('cells', { filterBy: $densityFilter }), {
+      qcAPI.densityY(qcAPI.from(table, { filterBy: $densityFilter }), {
         x: 'percent_mt',
         fill: 'sample',
         opacity: 0.44,
@@ -225,7 +229,7 @@ const Plots = () => {
 
   const plotSaturation = async () => {
     const featureCurve = saturationAPI.plot(
-      saturationAPI.line(saturationAPI.from('cells', { filterBy: $saturationFilter }), {
+      saturationAPI.line(saturationAPI.from(table, { filterBy: $saturationFilter }), {
         x: saturationAPI.sql`ROW_NUMBER() OVER (ORDER BY nFeature_RNA)`,
         y: 'nFeature_RNA',
         stroke: 'gray',
@@ -242,17 +246,17 @@ const Plots = () => {
     );
 
     const featureUMICurve = saturationAPI.plot(
-      saturationAPI.dot(saturationAPI.from('cells', { filterBy: $saturationFilter }), {
+      saturationAPI.hexbin(saturationAPI.from(table, { filterBy: $saturationFilter }), {
         x: 'nCount_RNA',
         y: 'nFeature_RNA',
-        r: 2.2,
-        fill: 'gray', 
-        opacity: 0.25,
+        binWidth: 7,
+        fill: 'sample', 
+        opacity: 0.44,
         tip: false
       }),
       saturationAPI.name('featureUMICurve'),
-      // saturationAPI.colorRange(tableau20),
-      // saturationAPI.colorDomain(samples),
+      saturationAPI.colorRange(tableau20),
+      saturationAPI.colorDomain(samples),
       saturationAPI.intervalXY({ as: $featureUMICurveBrush }),
       saturationAPI.xLabel(umapCategories.nCount_RNA.title),
       saturationAPI.yLabel(umapCategories.nFeature_RNA.title),
@@ -260,16 +264,22 @@ const Plots = () => {
       saturationAPI.height(255),
     );
 
+    const sampleLegend = saturationAPI.colorLegend({ 
+      for: 'featureUMICurve',
+      as: $sampleBrush
+    });
+
     if (featureCurveRef.current) featureCurveRef.current.replaceChildren(featureCurve);
     if (featureUMICurveRef.current) featureUMICurveRef.current.replaceChildren(featureUMICurve);
+    if (sampleSaturationLegendRef.current) sampleSaturationLegendRef.current.replaceChildren(sampleLegend);
   };
 
   useEffect(() => { // get number of pca clusters and arrays of unique cell types, samples, gene columns
     if (!coordinator) return;
-    fetchColumnCounts(coordinator, 'pca_cluster').then(result => setClusterCount(result));
-    fetchColumnValues(coordinator, 'cluster').then(result => setCellTypes(result));
-    fetchColumnValues(coordinator, 'sample').then(result => setSamples(result));
-    fetchGeneCols(coordinator).then(result => {
+    // fetchColumnCounts(coordinator, table, 'pca_cluster').then(result => setClusterCount(result));
+    fetchColumnValues(coordinator, table, 'cluster').then(result => setCellTypes(result));
+    fetchColumnValues(coordinator, table, 'sample').then(result => setSamples(result));
+    fetchGeneCols(coordinator, table).then(result => {
       if (result && result.length > 0) {
         setGene(result[0]);
         setGene2(result[1]);
@@ -280,7 +290,7 @@ const Plots = () => {
   
   useEffect(() => { // set top expressed genes in selection
     if (!showGeneExpr || genes.length === 0 || !geneExprAPI.context.coordinator) return;
-    const geneClient = fetchExpressionRates(geneExprAPI.context.coordinator, $allFilter, genes, setGeneExpressionRates);
+    const geneClient = fetchExpressionRates(geneExprAPI.context.coordinator, table, $allFilter, genes, setGeneExpressionRates);
     return () => {
       geneClient.destroy();
       geneExprAPI.context.coordinator.clear({ clients: true, cache: true });
@@ -289,13 +299,13 @@ const Plots = () => {
 
   useEffect(() => { // set cell type counts in selection
     if (!showCellTypeCount) return;
-    const client = fetchColumnCountsFilter(coordinator, $allFilter, 'cluster', cellTypes, setSelectedCellTypeCounts);
+    const client = fetchColumnCountsFilter(coordinator, table, $allFilter, 'cluster', cellTypes, setSelectedCellTypeCounts);
     return () => client.destroy()
   }, [cellTypes, showCellTypeCount]);
 
   useEffect(() => { // set sample counts in selection
     if (!showSampleCount) return;
-    const client = fetchColumnCountsFilter(coordinator, $allFilter, 'sample', samples, setSelectedSampleCounts);
+    const client = fetchColumnCountsFilter(coordinator, table, $allFilter, 'sample', samples, setSelectedSampleCounts);
     return () => client.destroy()
   }, [samples, showSampleCount]);
 
@@ -399,7 +409,7 @@ const Plots = () => {
               {showQCDist ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
             </a>
           </div>
-          <div id='collapseQCDist' className='collapse'>
+          <div id='collapseQCDist' className='collapse show'>
             <div className='card-body pt-1 px-0'>
               <div className='d-flex flex-row justify-content-center align-items-center border-bottom py-1'>
                 <div className='d-flex flex-grow-1 justify-content-center' ref={sampleLegendRef}></div>
@@ -475,13 +485,18 @@ const Plots = () => {
             </a>
           </div>
           <div id='collapseSaturation' className='collapse'>
-            <div className='card-body px-0'>
-              <div className='px-3 pb-3 border-bottom' ref={featureCurveRef}></div>
-              <div className='px-3 pt-3' ref={featureUMICurveRef}></div>
+            <div className='card-body pt-1 px-0'>
+              <div className='d-flex flex-row justify-content-center align-items-center border-bottom py-1'>
+                <div className='d-flex flex-grow-1 justify-content-center' ref={sampleSaturationLegendRef}></div>
+                <div className='me-3 text-center' style={{width: '80px'}}>
+                  <p className='text-xs mb-0 fw-bold'>{umapCategories.sample.title}</p>
+                </div>
+              </div>
+              <div className='px-3 py-3 border-bottom' ref={featureUMICurveRef}></div>
+              <div className='px-3 pt-3' ref={featureCurveRef}></div>
             </div>
           </div>
         </div>
-
 
         <div className='card my-0 py-0' style={{visibility: 'hidden'}}>
           <div className='card-body my-0 py-0' ref={plotColRef}>
@@ -638,7 +653,7 @@ const Plots = () => {
               {showSampleCount ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
             </a>
           </div>
-          <div id='collapseSampleCount' className='collapse'>
+          <div id='collapseSampleCount' className='collapse show'>
             <div className='card-body p-0'>
               <table className='table table-striped table-rounded text-xs'>
                 <thead>

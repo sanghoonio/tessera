@@ -75,12 +75,12 @@ function Navbar() {
                   position='side'
                   currentPage={location}
                 />
-                <NavLink
+                {/* <NavLink
                   page={'comparisons'}
                   title={'Comparisons'}
                   position='side'
                   currentPage={location}
-                />
+                /> */}
                 <NavLink
                   page={'config'}
                   title={'Config'}
