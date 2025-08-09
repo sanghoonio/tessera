@@ -17,6 +17,8 @@ function Config() {
           value={table}
           onChange={(e) => setTable(e.target.value)}
         >
+          <option value='sample'>Sample</option>
+          <option value='sample_qc_subset'>Sample (QC Subset)</option>
           <option value='ct'>CT</option>
           <option value='sc2'>SC2</option>
           <option value='sc4'>SC4</option>

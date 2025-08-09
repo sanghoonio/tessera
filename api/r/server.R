@@ -1,22 +1,12 @@
-library(httpuv)
-library(jsonlite)
+suppressWarnings(suppressMessages(library(httpuv, quietly = TRUE)))
+suppressWarnings(suppressMessages(library(jsonlite, quietly = TRUE)))
+
+source(file.path('R', 'utils.R'))
 
 handle_query <- function(con, cache, query) {
-#   cat('Query:', toJSON(query, auto_unbox = TRUE), '
-# ')
-#   cat(paste0('Type of query$sql: ', typeof(query$sql), '
-# '))
-#   cat(paste0('Type of query$type: ', typeof(query$type), '
-# '))
-#   cat(paste0('Is query$sql a character vector of length 1: ', is.character(query$sql) && length(query$sql) == 1, '
-# '))
-#   cat(paste0('Is query$type a character vector of length 1: ', is.character(query$type) && length(query$type) == 1, '
-# '))
-  start_time <- Sys.time()
-
   sql <- query$sql
   command <- query$type
-
+  
   result <- tryCatch({
     if (command == 'exec') {
       dbExecute(con, sql)
@@ -28,33 +18,22 @@ handle_query <- function(con, cache, query) {
       arrow_bytes <- retrieve(cache, query, function(s) get_arrow_bytes(con, s))
       list(type = 'arrow', data = arrow_bytes)
     } else {
-      stop(paste('Unknown command', command))
+      stop(paste('Unknown command: ', command))
     }
   }, error = function(e) {
     list(type = 'error', data = e$message)
   })
-
-  total_time <- round(as.numeric(Sys.time() - start_time) * 1000)
-  # if (!is.null(result$type) && result$type == 'error') {
-  #   cat('FAILED. Query took', total_time, 'ms.\n', sql, '\n')
-  # } else {
-  #   cat('DONE. Query took', total_time, 'ms.\n', sql, '\n')
-  # }
-
   result
 }
 
 create_server <- function(con, cache) {
   app <- list(
-    onWSOpen = function(ws) {
-      # cat('WebSocket connection opened\n')
-
+    onWSOpen = function(ws) { # websocket server
       ws$onMessage(function(binary, message) {
         tryCatch({
-          # cat('WebSocket message received\n')
           query <- fromJSON(message)
           result <- handle_query(con, cache, query)
-
+          
           if (result$type == 'done') {
             ws$send(as.character(toJSON(list(), auto_unbox = TRUE)))
           } else if (result$type == 'json') {
@@ -65,22 +44,15 @@ create_server <- function(con, cache) {
             ws$send(as.character(toJSON(list(error = result$data), auto_unbox = TRUE)))
           }
         }, error = function(e) {
-          # cat('Error in onWSMessage:\n')
           print(e)
-          tryCatch({
-            ws$send(as.character(toJSON(list(error = paste('Server error:', e$message)), auto_unbox = TRUE)))
-          }, error = function(e2) {
-            # cat('Failed to send error message to client:\n')
-            print(e2)
-          })
+          ws$send(as.character(toJSON(list(error = paste('Server error:', e$message)), auto_unbox = TRUE)))
         })
       })
-
+      
       ws$onClose(function() {
-        # cat('WebSocket connection closed\n')
       })
     },
-    call = function(req) {
+    call = function(req) { # http server
       headers <- list(
         'Access-Control-Allow-Origin' = '*',
         'Access-Control-Request-Method' = '*',
@@ -88,37 +60,64 @@ create_server <- function(con, cache) {
         'Access-Control-Allow-Headers' = '*',
         'Access-Control-Max-Age' = '2592000'
       )
-
+      
       if (req$REQUEST_METHOD == 'OPTIONS') {
         return(list(status = 200L, headers = headers, body = ''))
       }
-
-      if (req$REQUEST_METHOD == 'GET') {
-        query_param <- req$QUERY_STRING
-        query_json <- sub('^query=', '', query_param)
-        query <- fromJSON(URLdecode(query_json))
-
-        result <- handle_query(con, cache, query)
-
-        if (result$type == 'done') {
-          list(status = 200L, headers = headers, body = '')
-        } else if (result$type == 'json') {
-          Content-Type <- 'application/json'
-          list(status = 200L, headers = headers, body = result$data)
+      
+      path <- req$PATH_INFO
+      method <- req$REQUEST_METHOD
+      params <- parse_params(req$QUERY_STRING)
+      
+      if (path == '/api/echo') {
+        if (req$REQUEST_METHOD == 'GET') {
+          query_string <- req$QUERY_STRING
+          msg <- NULL
+          
+          if (!is.null(query_string) && grepl('msg=', query_string)) {
+            msg_part <- sub('.*msg=([^&]*).*', '\\1', query_string)
+            msg <- URLdecode(msg_part)
+          }
+          
+          if (is.null(msg) || msg == '') {
+            return(list(status = 400L, headers = headers, 
+                        body = toJSON(list(error = 'Missing msg parameter'))))
+          }
+          
+          headers$`Content-Type` <- 'application/json'
+          return(list(
+            status = 200L, 
+            headers = headers, 
+            body = toJSON(list(message = msg), auto_unbox = TRUE)
+          ))
         } else {
-          list(status = 500L, headers = headers, body = result$data)
+          list(
+            status = 405L,
+            headers = list('Content-Type' = 'text/plain'),
+            body = 'Method Not Allowed'
+          )
         }
-      } else {
-        list(
-          status = 405L,
-          headers = list('Content-Type' = 'text/plain'),
-          body = 'Method Not Allowed'
-        )
       }
-    }
+      else { # serve ui index
+        index_path <- file.path('..', 'ui', 'dist', 'index.html')
+        if (file.exists(index_path)) {
+          index_content <- readBin(index_path, 'raw', n = file.info(index_path)$size)
+          list(
+            status = 200L, 
+            headers = list('Content-Type' = 'text/html'),
+            body = index_content
+          )
+        } else {
+          list(status = 404L, body = 'UI assets not found. Follow the README in the /ui directory to build the frontend.')
+        }
+      }
+    },
+    staticPaths = list( # serve ui assets
+      '/assets' = file.path('..', 'ui', 'dist', 'assets')
+    )
   )
-
-  cat('DuckDB Server listening at ws://localhost:3000 and http://localhost:3000\n')
+  
+  cat('Server listening at ws://localhost:3000 and http://localhost:3000\n')
+  utils::browseURL('http://localhost:3000')
   runServer('0.0.0.0', 3000, app)
 }
-

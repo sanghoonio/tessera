@@ -6,7 +6,7 @@ type TableStore = {
 }
 
 export const useTableStore = create<TableStore>((set) => ({
-  table: 'ct',
+  table: 'sample',
   setTable: ((newTable: string) => set({table: newTable}))
 }))
 
