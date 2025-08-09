@@ -2,6 +2,8 @@ import * as vg from '@uwdata/vgplot';
 import { makeClient } from "@uwdata/mosaic-core";
 import { Query, count, sum } from "@uwdata/mosaic-sql";
 
+import { createTableQuery } from './utils';
+
 
 export const fetchColumnCounts = async (coordinator: any, table: string, column: string) => {
   const result = await coordinator.query(
@@ -28,73 +30,65 @@ export const fetchColumnValues = async (coordinator: any, table: string, column:
 
 export const fetchGeneCols = async (coordinator: any, table: string) => {
   const result = await coordinator.query(
-    Query.from('information_schema.columns')
-      .select('column_name')
-      .where(`table_name = '${table}' AND column_name LIKE 'gene_%'`)
-      .orderby('column_name')
+    Query.from(table + '_expr')
+      .select('gene_name')
+      .distinct()
+      .orderby('gene_name')
   );
-  const columns = [];
-  for (let i = 0; i < (result as any).numRows; i++) {
-    columns.push((result as any).getChild('column_name').get(i));
+  const genes = [];
+  for (let i = 0; i < result.numRows; i++) {
+    genes.push('gene_' + result.getChild('gene_name').get(i));
   }
-  return columns;
+  return genes;
 };
 
 export const fetchExpressionRates = (
   coordinator: any,
   table: string,
   selection: any,
-  genes: string[],
   setGeneExpressionRates: (geneExpressionRates: any) => void
 ) => makeClient({
   coordinator: coordinator,
   selection: selection,
   query: (predicate) => {
-    // Build the SELECT clause with count of non-zero expression for each gene column
-    const countSelects: Record<string, any> = {};
-    genes.forEach(gene => {
-      countSelects[`count_${gene}`] = sum(vg.sql`CASE WHEN ${gene} > 0 THEN 1 ELSE 0 END`);
-    });
-    // Also get total count for calculating expression rate
-    countSelects['total_count'] = count();
+    let query = Query
+      .from({
+        expr: table + '_expr',
+        tbl: table
+      })
+      .select({
+        gene_name: 'expr.gene_name',
+        expr_cells: count(),
+        total_cells: vg.sql`COUNT(DISTINCT tbl.cell_id)`
+      })
+      .where(vg.sql`expr.cell_id = tbl.cell_id`)
+      .groupby('expr.gene_name');
 
-    let query = Query.from(table).select(countSelects);
     if (predicate) {
       query = query.where(predicate);
     }
-    return query;
+
+    return query
+      .orderby(vg.sql`expr_cells DESC`)
+      .limit(25);
   },
   queryResult: async (data: any) => {
-    // Convert results to array of objects
-    const geneExpressionRates: {gene: string, expressionRate: number}[] = [];
-    
-    try {
-      const totalCells = data.getChild('total_count').get(0);
+    const results = [];
+    for (let i = 0; i < data.numRows; i++) {
+      const exprCells = data.getChild('expr_cells').get(i);
+      const totalCells = data.getChild('total_cells').get(i);
       
-      genes.forEach(gene => {
-        const countColumnName = `count_${gene}`;
-        try {
-          const nonZeroCount = data.getChild(countColumnName).get(0);
-          const expressionRate = totalCells > 0 ? (nonZeroCount / totalCells) * 100 : 0;
-          geneExpressionRates.push({
-            gene: gene.replace('gene_', ''),
-            expressionRate: expressionRate
-          });
-        } catch (error) {
-          console.warn(`Could not get expression rate for ${gene}:`, error);
-        }
+      results.push({
+        gene: data.getChild('gene_name').get(i),
+        exprRate: exprCells
       });
-
-      setGeneExpressionRates(geneExpressionRates.sort((a, b) => b.expressionRate - a.expressionRate).slice(0, 25));
-    } catch (error) {
-      console.error('Error processing expression rates:', error);
     }
+    setGeneExpressionRates(results);
   },
   queryError: (error) => {
-    console.error('Gene expression rates query error:', error);
+    console.error('Long format query error:', error);
   },
 });
-
 
 export const fetchColumnCountsFilter = (
   coordinator: any, 
@@ -102,12 +96,16 @@ export const fetchColumnCountsFilter = (
   selection: any, 
   column: string,
   columnValues: string[],
+  gene: string, 
+  gene2: string,
   setSelectionCounts: (prev: any) => void
 ) => makeClient({
   coordinator: coordinator,
   selection: selection,
   query: (predicate) => {
-    return Query.from(table)
+    const tableQuery = createTableQuery(table, gene, gene2)
+
+    return tableQuery
       .select(column, {count: count()})
       .where(predicate)
       .groupby(column);

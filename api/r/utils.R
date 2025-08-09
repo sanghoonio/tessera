@@ -1,4 +1,7 @@
+suppressWarnings(suppressMessages(library(duckdb, quietly = TRUE)))
+suppressWarnings(suppressMessages(library(arrow, quietly = TRUE)))
 suppressWarnings(suppressMessages(library(data.table, quietly = TRUE)))
+suppressWarnings(suppressMessages(library(jsonlite, quietly = TRUE)))
 
 parse_params <- function(query_string) {
   if (is.null(query_string) || nchar(query_string) == 0) {
@@ -35,11 +38,6 @@ clean_sql_names <- function(names) {
 }
 
 load_test <- function(con) {
-  df <- fread(file.path('..', 'db', 'sample', 'sample.txt'))
-  df <- setnames(df, clean_sql_names(colnames(df)))
-  dbWriteTable(con, 'sample', df, append = FALSE, overwrite = TRUE, row.names = FALSE)
-  
-  df <- fread(file.path('..', 'db', 'sample', 'sample_qc_subset.txt'))
-  df <- setnames(df, clean_sql_names(colnames(df)))
-  dbWriteTable(con, 'sample_qc_subset', df, append = FALSE, overwrite = TRUE, row.names = FALSE)
+  dbExecute(con, "CREATE OR REPLACE TABLE sample AS SELECT * FROM read_parquet('../db/sample/sample.parquet')")
+  dbExecute(con, "CREATE OR REPLACE TABLE sample_expr AS SELECT * FROM read_parquet('../db/sample/sample_expr.parquet')")
 }

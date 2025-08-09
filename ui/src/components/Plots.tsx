@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import Select from 'react-select'
 import * as vg from '@uwdata/vgplot';
 
-import { createUmapCategories, bootstrapSelectStyles, tableau20 } from '../utils';
+import { createUmapCategories, bootstrapSelectStyles, tableau20, createTableQuery } from '../utils';
 import { fetchGeneCols, fetchColumnValues, fetchExpressionRates, fetchColumnCountsFilter } from '../clients';
 import { useTableStore } from '../stores/config';
 
@@ -36,7 +36,7 @@ const Plots = () => {
   const [samples, setSamples] = useState<string[]>([]);
 
   const [geneComparisonMode, setGeneComparisonMode] = useState('categorical');
-  const [geneExpressionRates, setGeneExpressionRates] = useState<{gene: string, expressionRate: number}[]>([]);
+  const [geneExpressionRates, setGeneExpressionRates] = useState<{gene: string, exprRate: number}[]>([]);
   const [genes, setGenes] = useState<string[]>([])
   const [gene, setGene] = useState('');
   const [gene2, setGene2] = useState('');
@@ -118,9 +118,10 @@ const Plots = () => {
   const plotUMAP = async () => {
     const umapWidth = containerWidth;
     const umapHeight = umapWidth * 11/16;
+    const tableQuery = createTableQuery(table, gene, gene2);
 
     const umapArgs = [
-      umapAPI.dot(umapAPI.from(table, {}), {
+      umapAPI.dot(umapAPI.from(tableQuery, {}), {
         x: 'UMAP_1',
         y: 'UMAP_2',
         fill: umapCategory.fillValue,
@@ -162,8 +163,10 @@ const Plots = () => {
   };
 
   const plotQC = async () => {
+    const tableQuery = createTableQuery(table, gene, gene2);
+
     const nFeature = qcAPI.plot(
-      qcAPI.densityY(qcAPI.from(table, { filterBy: $densityFilter }), {
+      qcAPI.densityY(qcAPI.from(tableQuery, { filterBy: $densityFilter }), {
         x: 'nFeature_RNA',
         fill: 'sample',
         opacity: 0.5,
@@ -181,7 +184,7 @@ const Plots = () => {
     );
 
     const nCount = qcAPI.plot(
-      qcAPI.densityY(qcAPI.from(table, { filterBy: $densityFilter }), {
+      qcAPI.densityY(qcAPI.from(tableQuery, { filterBy: $densityFilter }), {
         x: 'nCount_RNA',
         fill: 'sample',
         opacity: 0.44,
@@ -199,7 +202,7 @@ const Plots = () => {
     );
 
     const percentMT = qcAPI.plot(
-      qcAPI.densityY(qcAPI.from(table, { filterBy: $densityFilter }), {
+      qcAPI.densityY(qcAPI.from(tableQuery, { filterBy: $densityFilter }), {
         x: 'percent_mt',
         fill: 'sample',
         opacity: 0.44,
@@ -228,8 +231,10 @@ const Plots = () => {
   };
 
   const plotSaturation = async () => {
+    const tableQuery = createTableQuery(table, gene, gene2);
+
     const featureCurve = saturationAPI.plot(
-      saturationAPI.line(saturationAPI.from(table, { filterBy: $saturationFilter }), {
+      saturationAPI.line(saturationAPI.from(tableQuery, { filterBy: $saturationFilter }), {
         x: saturationAPI.sql`ROW_NUMBER() OVER (ORDER BY nFeature_RNA)`,
         y: 'nFeature_RNA',
         stroke: 'gray',
@@ -246,7 +251,7 @@ const Plots = () => {
     );
 
     const featureUMICurve = saturationAPI.plot(
-      saturationAPI.hexbin(saturationAPI.from(table, { filterBy: $saturationFilter }), {
+      saturationAPI.hexbin(saturationAPI.from(tableQuery, { filterBy: $saturationFilter }), {
         x: 'nCount_RNA',
         y: 'nFeature_RNA',
         binWidth: 7,
@@ -290,7 +295,7 @@ const Plots = () => {
   
   useEffect(() => { // set top expressed genes in selection
     if (!showGeneExpr || genes.length === 0 || !geneExprAPI.context.coordinator) return;
-    const geneClient = fetchExpressionRates(geneExprAPI.context.coordinator, table, $allFilter, genes, setGeneExpressionRates);
+    const geneClient = fetchExpressionRates(geneExprAPI.context.coordinator, table, $allFilter, setGeneExpressionRates);
     return () => {
       geneClient.destroy();
       geneExprAPI.context.coordinator.clear({ clients: true, cache: true });
@@ -299,15 +304,15 @@ const Plots = () => {
 
   useEffect(() => { // set cell type counts in selection
     if (!showCellTypeCount) return;
-    const client = fetchColumnCountsFilter(coordinator, table, $allFilter, 'cluster', cellTypes, setSelectedCellTypeCounts);
+    const client = fetchColumnCountsFilter(coordinator, table, $allFilter, 'cluster', cellTypes, gene, gene2, setSelectedCellTypeCounts);
     return () => client.destroy()
-  }, [cellTypes, showCellTypeCount]);
+  }, [cellTypes, gene, gene2, showCellTypeCount]);
 
   useEffect(() => { // set sample counts in selection
     if (!showSampleCount) return;
-    const client = fetchColumnCountsFilter(coordinator, table, $allFilter, 'sample', samples, setSelectedSampleCounts);
+    const client = fetchColumnCountsFilter(coordinator, table, $allFilter, 'sample', samples, gene, gene2, setSelectedSampleCounts);
     return () => client.destroy()
-  }, [samples, showSampleCount]);
+  }, [samples, gene, gene2, showSampleCount]);
 
   useEffect(() => { // plot umap if any dependencies change
     if (!showUMAP) return;
@@ -324,7 +329,7 @@ const Plots = () => {
     return () => {
       qcAPI.context.coordinator.clear({ clients: true, cache: true });
     }
-  }, [samples, showQCDist]);
+  }, [samples, gene, gene2,, showQCDist]);
 
   useEffect(() => { // plot saturation if any dependencies change
     if (!showSaturation) return;
@@ -332,7 +337,7 @@ const Plots = () => {
     return () => {
       saturationAPI.context.coordinator.clear({ clients: true, cache: true });
     }
-  }, [samples, showSaturation]);
+  }, [samples, gene, gene2,, showSaturation]);
 
   useEffect(() => { // container width watcher
     const cardBody = plotColRef.current;
@@ -707,7 +712,7 @@ const Plots = () => {
                   {geneExpressionRates.map((item, index) => (
                     <tr key={index}>
                       <td>{item.gene}</td>
-                      <td>{item.expressionRate.toFixed(2)}%</td>
+                      <td>{item.exprRate.toFixed(2)}%</td>
                     </tr>
                   ))}
                 </tbody>

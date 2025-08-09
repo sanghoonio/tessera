@@ -217,3 +217,28 @@ export const bootstrapSelectStyles = {
     padding: '0.25rem 0.5rem'
   })
 };
+
+export const createTableQuery = (table: string, gene: string, gene2: string) => {
+  return vg.Query
+    .from({
+      tbl: table,
+      expr: table + '_expr'
+    })
+    .select({
+      cell_id: 'tbl.cell_id',
+      cluster: 'tbl.cluster',
+      pca_cluster: 'tbl.pca_cluster',
+      sample: 'tbl.sample',
+      orig_ident: 'tbl.orig_ident',
+      nFeature_RNA: 'tbl.nFeature_RNA',
+      nCount_RNA: 'tbl.nCount_RNA',
+      percent_mt: 'tbl.percent_mt',
+      UMAP_1: 'tbl.UMAP_1',
+      UMAP_2: 'tbl.UMAP_2',
+      [gene]: vg.sql`MAX(CASE WHEN expr.gene_name = '${gene}' THEN expr.expr ELSE 0 END)`,
+      [gene2]: vg.sql`MAX(CASE WHEN expr.gene_name = '${gene2}' THEN expr.expr ELSE 0 END)`
+    })
+    .where(vg.sql`tbl.cell_id = expr.cell_id`)
+    .groupby('tbl.cell_id', 'tbl.cluster', 'tbl.pca_cluster', 'tbl.sample', 'tbl.orig_ident', 'tbl.nFeature_RNA', 'tbl.nCount_RNA', 'tbl.percent_mt', 'tbl.UMAP_1', 'tbl.UMAP_2')
+    .orderby('tbl.cell_id');
+};
