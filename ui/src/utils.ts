@@ -19,10 +19,12 @@ export const createUmapCategories = (
   cellTypes: string[], 
   samples: string[]
 ) => {
+  const geneCol = 'gene_' + gene;
+  const gene2Col = 'gene_' + gene2;
   const umapCategories = {
     'cluster': {
       title: 'Cell Type', 
-      legendTitle: null, 
+      legendTitle: 'Cell Type', 
       fillValue: 'cluster', 
       colorScale: 'ordinal', 
       colorRange: tableau20,
@@ -32,7 +34,7 @@ export const createUmapCategories = (
     },
     'pca_cluster': {
       title: 'Seurat Cluster', 
-      legendTitle: null, 
+      legendTitle: 'Seurat Cluster', 
       fillValue: 'pca_cluster', 
       colorScale: 'ordinal', 
       colorRange: tableau20,
@@ -43,7 +45,7 @@ export const createUmapCategories = (
     },
     'sample': {
       title: 'Sample', 
-      legendTitle: null, 
+      legendTitle: 'Sample', 
       fillValue: 'sample', 
       colorScale: 'ordinal', 
       colorRange: tableau20,
@@ -53,7 +55,7 @@ export const createUmapCategories = (
     },
     'orig_ident': {
       title: 'Source', 
-      legendTitle: null, 
+      legendTitle: 'Source', 
       fillValue: 'orig_ident', 
       colorScale: 'ordinal', 
       colorRange: tableau20,
@@ -63,7 +65,7 @@ export const createUmapCategories = (
     },
     'nFeature_RNA': {
       title: 'nFeature', 
-      legendTitle: null, 
+      legendTitle: 'nFeature', 
       fillValue: 'nFeature_RNA', 
       colorScale: 'linear', 
       colorRange: null,
@@ -73,7 +75,7 @@ export const createUmapCategories = (
     },
     'nCount_RNA': {
       title: 'nUMI',
-      legendTitle: null, 
+      legendTitle: 'nUMI', 
       fillValue: 'nCount_RNA', 
       colorScale: 'linear', 
       colorRange: null,
@@ -83,7 +85,7 @@ export const createUmapCategories = (
     }, 
     'percent_mt': {
       title: 'Percent MT', 
-      legendTitle: null, 
+      legendTitle: 'Percent MT', 
       fillValue: 'percent_mt', 
       colorScale: 'linear', 
       colorRange: null,
@@ -93,8 +95,8 @@ export const createUmapCategories = (
     },
     'gene': {
       title: 'Gene Expression', 
-      legendTitle: `${gene.replace('gene_', '')} Expression`, 
-      fillValue: gene, 
+      legendTitle: `${gene} Expression`, 
+      fillValue: geneCol, 
       colorScale: 'linear', 
       colorRange: grayBlue,
       colorDomain: null,
@@ -104,24 +106,28 @@ export const createUmapCategories = (
     'genes': {
       title: 'Gene Coexpression', 
       legendTitle: geneComparisonMode === 'addition' 
-        ? `${gene.replace('gene_', '')} or ${gene2.replace('gene_', '')}`
+        ? `${gene} or ${gene2}`
         : geneComparisonMode === 'geometric' 
-          ? `${gene.replace('gene_', '')} and ${gene2.replace('gene_', '')}`
-          : `${gene.replace('gene_', '')} vs. ${gene2.replace('gene_', '')}`, 
+          ? `${gene} and ${gene2}`
+          : `${gene} vs. ${gene2}`, 
       fillValue: (() => {
         switch(geneComparisonMode) {
           case 'addition':
-            return vg.sql`${gene} + ${gene2}`;
+            return vg.sql`${geneCol} + ${gene2Col}`;
           case 'geometric':
-            return vg.sql`SQRT(${gene} * ${gene2})`;
+            return vg.sql`SQRT(${geneCol} * ${gene2Col})`;
           case 'logfold':
-            return vg.sql`LOG(${gene2} + 1) - LOG(${gene} + 1)`;
+            return vg.sql`LOG(${gene2Col} + 1) - LOG(${geneCol} + 1)`;
           case 'categorical':
             return gene === gene2
-              ? vg.sql`CASE WHEN ${gene} > 1 THEN '${gene} Expressed' ELSE 'Not Expressed' END`
-              : vg.sql`CASE WHEN ${gene} > 1 AND ${gene2} > 1 THEN 'Both Expressed' WHEN ${gene} > 0 THEN '${gene} Expressed' WHEN ${gene2} > 0 THEN '${gene2} Expressed' ELSE 'Neither Expressed' END`;
+              ? vg.sql`CASE WHEN ${geneCol} > 0 THEN '${geneCol} Expressed' ELSE 'Not Expressed' END`
+              : vg.sql`CASE 
+                  WHEN ${geneCol} > 0 AND ${gene2Col} > 0 THEN 'Both Expressed'
+                  WHEN ${geneCol} > 0 AND ${gene2Col} = 0 THEN '${gene} Expressed' 
+                  WHEN ${geneCol} = 0 AND ${gene2Col} > 0 THEN '${gene2} Expressed'
+                  ELSE 'Neither Expressed' END`
           default:
-            return gene;
+            return geneCol;
         }
       })(), 
       colorScale: geneComparisonMode === 'categorical' ? 'ordinal' : 'linear', 
@@ -134,15 +140,15 @@ export const createUmapCategories = (
           : grayBlue,
       colorDomain: geneComparisonMode === 'categorical' 
         ? gene === gene2 
-          ? [`${gene.replace('gene_', '')} Expressed`, 'Not Expressed']
-          : ['Both Expressed', `${gene.replace('gene_', '')} Expressed`, `${gene2.replace('gene_', '')} Expressed`, 'Neither Expressed']
+          ? [`${gene} Expressed`, 'Not Expressed']
+          : ['Both Expressed', `${gene} Expressed`, `${gene2} Expressed`, 'Neither Expressed']
         : null,
       colorScheme: null,
       colorReverse: null
     }, 
     'excluded': {
       title: 'Filter Exclusion', 
-      legendTitle: null, 
+      legendTitle: 'Filter Exclusion', 
       fillValue: transparentGray, 
       colorScale: 'ordinal', 
       colorRange: [transparentGray, transparentRed],
@@ -210,6 +216,7 @@ export const bootstrapSelectStyles = {
     fontFamily: 'Nunito',
     fontWeight: 400 ,
     fontStyle: 'normal',
+    zIndex: 999
   }),
   option: (provided: any) => ({
     ...provided,

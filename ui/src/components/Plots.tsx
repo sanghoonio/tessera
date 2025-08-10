@@ -3,7 +3,7 @@ import Select from 'react-select'
 import * as vg from '@uwdata/vgplot';
 
 import { createUmapCategories, bootstrapSelectStyles, tableau20 } from '../utils';
-import { fetchGeneCols, fetchColumnValues, fetchExpressionRates, fetchColumnCountsFilter } from '../clients';
+import { fetchGeneCols, fetchColumnValues, fetchColumnCountsFilter, fetchExpressionRates, fetchExpressionMeans, fetchExpressionCVs, fetchExpressionFolds } from '../clients';
 import { useTableStore } from '../stores/config';
 
 const Plots = () => {
@@ -27,6 +27,9 @@ const Plots = () => {
   const [showCellTypeCount, setShowCellTypeCount] = useState(true);
   const [showSampleCount, setShowSampleCount] = useState(true);
   const [showGeneExpr, setShowGeneExpr] = useState(false);
+  const [showGeneMean, setShowGeneMean] = useState(false);
+  const [showGeneCV, setShowGeneCV] = useState(false);
+  const [showGeneFold, setShowGeneFold] = useState(false);
 
   const [umapFill, setUmapFill] = useState('cluster');
   const [containerWidth, setContainerWidth] = useState(800);
@@ -35,8 +38,11 @@ const Plots = () => {
   const [cellTypes, setCellTypes] = useState<string[]>([]);
   const [samples, setSamples] = useState<string[]>([]);
 
-  const [geneComparisonMode, setGeneComparisonMode] = useState('categorical');
-  const [geneExpressionRates, setGeneExpressionRates] = useState<{gene: string, expressionRate: number}[]>([]);
+  const [geneComparisonMode, setGeneComparisonMode] = useState('logfold');
+  const [geneExpressionRates, setGeneExpressionRates] = useState<{gene: string, exprRate: number}[]>([]);
+  const [geneExpressionMeans, setGeneExpressionMeans] = useState<{gene: string, exprMean: number}[]>([]);
+  const [geneExpressionCVs, setGeneExpressionCVs] = useState<{gene: string, cv: number}[]>([]);
+  const [geneExpressionFolds, setGeneExpressionFolds] = useState<{gene: string, foldEnrichment: number}[]>([]);
   const [genes, setGenes] = useState<string[]>([])
   const [gene, setGene] = useState('');
   const [gene2, setGene2] = useState('');
@@ -55,7 +61,7 @@ const Plots = () => {
   const geneOptions = useMemo(() => 
     genes.map((gene: string) => ({
       value: gene, 
-      label: gene.replace('gene_', '')
+      label: gene
     })),
     [genes]
   );
@@ -66,11 +72,20 @@ const Plots = () => {
   );
   const umapCategory = umapCategories[umapFill as keyof typeof umapCategories];
 
+  const handleClickGeneRow = (gene: string) => {
+    setUmapFill('gene');
+    setGene(gene);
+  }
+
   const coordinator = vg.coordinator();
   // const coordinator = useRef(vg.coordinator()).current;
   // vg.coordinator().databaseConnector(vg.socketConnector());
 
   const geneExprAPI = vg.createAPIContext({coordinator: new vg.Coordinator(vg.socketConnector())});
+  const geneMeanAPI = vg.createAPIContext({coordinator: new vg.Coordinator(vg.socketConnector())});
+  const geneCVAPI = vg.createAPIContext({coordinator: new vg.Coordinator(vg.socketConnector())});
+  const geneFoldAPI = vg.createAPIContext({coordinator: new vg.Coordinator(vg.socketConnector())});
+
   const umapAPI = vg.createAPIContext({coordinator: new vg.Coordinator(vg.socketConnector())});
   const qcAPI = vg.createAPIContext({coordinator: new vg.Coordinator(vg.socketConnector())});
   const saturationAPI = vg.createAPIContext({coordinator: new vg.Coordinator(vg.socketConnector())});
@@ -126,11 +141,13 @@ const Plots = () => {
         fill: umapCategory.fillValue,
         r: 1.3,
         opacity: 0.44,
-        tip: { format: { x: false, y: false, fill: false } },
-        title: 'cluster'
+        tip: { format: { x: false, y: false, fill: false, cell_id: false, 'Cell Type:': true, 'Sample:': true, [umapCategory.legendTitle + ':']: true } },
+        // title: 'cluster',
+        channels: {cell_id: 'cell_id', 'Cell Type:': 'cluster', 'Sample:': 'sample', [umapCategory.legendTitle + ':']: umapCategory.fillValue}
       }),
       umapAPI.name('umap'),
-      umapAPI.intervalXY({ as: $umapBrush, brush: { fill: 'none', stroke: '#888' } }),
+      umapAPI.region({channels: ['cell_id'], as: $umapBrush, brush: { fill: 'none', stroke: '#888' } }),
+      // umapAPI.intervalXY({ as: $umapBrush, brush: { fill: 'none', stroke: '#888' } }),
       umapAPI.highlight({ by: $allFilter, fill: umapFill === 'excluded' ? 'red' : '#ccc', fillOpacity: umapFill === 'excluded' ? 0.3 : 0.2 }),
       umapAPI.xLabel('UMAP Dimension 1'),
       umapAPI.yLabel('UMAP Dimension 2'),
@@ -152,6 +169,7 @@ const Plots = () => {
 
     const umapLegend = umapAPI.colorLegend({ 
       for: 'umap',
+      channels: ['cell_id'],
       as: umapFill === 'excluded' ? null : $legendBrush, 
       columns: 1, 
       label: umapCategory.legendTitle ? umapCategory.legendTitle : umapCategory.title
@@ -290,12 +308,39 @@ const Plots = () => {
   
   useEffect(() => { // set top expressed genes in selection
     if (!showGeneExpr || genes.length === 0 || !geneExprAPI.context.coordinator) return;
-    const geneClient = fetchExpressionRates(geneExprAPI.context.coordinator, table, $allFilter, genes, setGeneExpressionRates);
+    const geneClient = fetchExpressionRates(geneExprAPI.context.coordinator, table, $allFilter, setGeneExpressionRates);
     return () => {
       geneClient.destroy();
       geneExprAPI.context.coordinator.clear({ clients: true, cache: true });
     }
   }, [genes, showGeneExpr]);
+
+  useEffect(() => { // set top expressed genes in selection
+    if (!showGeneMean || genes.length === 0 || !geneMeanAPI.context.coordinator) return;
+    const geneClient = fetchExpressionMeans(geneMeanAPI.context.coordinator, table, $allFilter, setGeneExpressionMeans);
+    return () => {
+      geneClient.destroy();
+      geneMeanAPI.context.coordinator.clear({ clients: true, cache: true });
+    }
+  }, [genes, showGeneMean]);
+
+  useEffect(() => { // set top cv genes in selection
+    if (!showGeneCV || genes.length === 0 || !geneCVAPI.context.coordinator) return;
+    const geneClient = fetchExpressionCVs(geneCVAPI.context.coordinator, table, $allFilter, setGeneExpressionCVs);
+    return () => {
+      geneClient.destroy();
+      geneCVAPI.context.coordinator.clear({ clients: true, cache: true });
+    }
+  }, [genes, showGeneCV]);
+
+  useEffect(() => { // set top fold genes in selection
+    if (!showGeneFold || genes.length === 0 || !geneFoldAPI.context.coordinator) return;
+    const geneClient = fetchExpressionFolds(geneFoldAPI.context.coordinator, table, $allFilter, setGeneExpressionFolds);
+    return () => {
+      geneClient.destroy();
+      geneFoldAPI.context.coordinator.clear({ clients: true, cache: true });
+    }
+  }, [genes, showGeneFold]);
 
   useEffect(() => { // set cell type counts in selection
     if (!showCellTypeCount) return;
@@ -574,10 +619,10 @@ const Plots = () => {
                     value={geneComparisonMode}
                     onChange={(e) => setGeneComparisonMode(e.target.value)}
                   >
-                    <option value='categorical'>Categorical</option>
-                    <option value='addition'>Simple Addition</option>
-                    <option value='geometric'>Geometric Mean</option>
+                    {/* <option value='categorical'>Categorical</option> */}
                     <option value='logfold'>Log Fold Change</option>
+                    <option value='geometric'>Geometric Mean</option>
+                    <option value='addition'>Simple Addition</option>
                   </select>
                 </>
               )}
@@ -684,6 +729,50 @@ const Plots = () => {
             <span className='fw-bold'>Most Expressed Genes</span>
             <a 
               className='text-black fs-5 ms-auto cursor-pointer stretched-link'
+              onClick={() => setShowGeneMean(!showGeneMean)}
+              type='button'
+              data-bs-toggle='collapse'
+              data-bs-target='#collapseGeneMean'
+              aria-expanded={showGeneMean}
+              aria-controls='collapseGeneMean'
+            >
+              {showGeneMean ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
+            </a>
+          </div>
+          <div id='collapseGeneMean' className='collapse'>
+            <div className='card-body p-0'>
+              <table className='table table-striped table-rounded table-hover text-xs'>
+                <thead>
+                  <tr>
+                    <th>Gene</th>
+                    <th>Mean Expression</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.keys(geneExpressionMeans).length > 0 ? (
+                    geneExpressionMeans.map((item, index) => (
+                      <tr key={index} className='cursor-pointer' onClick={() => handleClickGeneRow(item.gene)}>
+                        <td>{item.gene}</td>
+                        <td>{item.exprMean.toFixed(2)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr className='cursor-pointer'>
+                      <td className='fst-italic fw-medium'>None</td>
+                      <td className='fst-italic fw-medium'>No Cells Selected</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div className='card mb-3 shadow-sm'>
+          <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
+            <span className='fw-bold'>Most Frequent Genes</span>
+            <a 
+              className='text-black fs-5 ms-auto cursor-pointer stretched-link'
               onClick={() => setShowGeneExpr(!showGeneExpr)}
               type='button'
               data-bs-toggle='collapse'
@@ -696,7 +785,7 @@ const Plots = () => {
           </div>
           <div id='collapseGeneExpr' className='collapse'>
             <div className='card-body p-0'>
-              <table className='table table-striped table-rounded text-xs'>
+              <table className='table table-striped table-rounded table-hover text-xs'>
                 <thead>
                   <tr>
                     <th>Gene</th>
@@ -704,12 +793,107 @@ const Plots = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {geneExpressionRates.map((item, index) => (
-                    <tr key={index}>
-                      <td>{item.gene}</td>
-                      <td>{item.expressionRate.toFixed(2)}%</td>
+                  {Object.keys(geneExpressionRates).length > 0 ? (
+                    geneExpressionRates.map((item, index) => (
+                      <tr key={index} className='cursor-pointer' onClick={() => handleClickGeneRow(item.gene)}>
+                        <td>{item.gene}</td>
+                        <td>{item.exprRate.toFixed(2)}%</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr className='cursor-pointer'>
+                      <td className='fst-italic fw-medium'>None</td>
+                      <td className='fst-italic fw-medium'>No Cells Selected</td>
                     </tr>
-                  ))}
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div className='card mb-3 shadow-sm'>
+          <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
+            <span className='fw-bold'>Most Variable Genes</span>
+            <a 
+              className='text-black fs-5 ms-auto cursor-pointer stretched-link'
+              onClick={() => setShowGeneCV(!showGeneCV)}
+              type='button'
+              data-bs-toggle='collapse'
+              data-bs-target='#collapseGeneCV'
+              aria-expanded={showGeneCV}
+              aria-controls='collapseGeneCV'
+            >
+              {showGeneCV ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
+            </a>
+          </div>
+          <div id='collapseGeneCV' className='collapse'>
+            <div className='card-body p-0'>
+              <table className='table table-striped table-rounded table-hover text-xs'>
+                <thead>
+                  <tr>
+                    <th>Gene</th>
+                    <th>Coefficient of Variation</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.keys(geneExpressionCVs).length > 0 ? (
+                    geneExpressionCVs.map((item, index) => (
+                      <tr key={index} className='cursor-pointer' onClick={() => handleClickGeneRow(item.gene)}>
+                        <td>{item.gene}</td>
+                        <td>{item.cv.toFixed(2)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr className='cursor-pointer'>
+                      <td className='fst-italic fw-medium'>None</td>
+                      <td className='fst-italic fw-medium'>No Cells Selected</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div className='card mb-3 shadow-sm'>
+          <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
+            <span className='fw-bold'>Most Unique Genes</span>
+            <a 
+              className='text-black fs-5 ms-auto cursor-pointer stretched-link'
+              onClick={() => setShowGeneFold(!showGeneFold)}
+              type='button'
+              data-bs-toggle='collapse'
+              data-bs-target='#collapseGeneFold'
+              aria-expanded={showGeneFold}
+              aria-controls='collapseGeneFold'
+            >
+              {showGeneFold ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
+            </a>
+          </div>
+          <div id='collapseGeneFold' className='collapse'>
+            <div className='card-body p-0'>
+              <table className='table table-striped table-rounded table-hover text-xs'>
+                <thead>
+                  <tr>
+                    <th>Gene</th>
+                    <th>Fold Enrichment</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.keys(geneExpressionFolds).length > 0 ? (
+                    geneExpressionFolds.map((item, index) => (
+                      <tr key={index} className='cursor-pointer' onClick={() => handleClickGeneRow(item.gene)}>
+                        <td>{item.gene}</td>
+                        <td>{item.foldEnrichment.toFixed(2)}x background</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr className='cursor-pointer'>
+                      <td className='fst-italic fw-medium'>None</td>
+                      <td className='fst-italic fw-medium'>No Cells Selected</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
