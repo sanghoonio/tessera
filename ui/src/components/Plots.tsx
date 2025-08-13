@@ -4,10 +4,10 @@ import * as vg from '@uwdata/vgplot';
 
 import { createUmapCategories, bootstrapSelectStyles, tableau20 } from '../utils';
 import { fetchGeneCols, fetchColumnValues, fetchColumnCountsFilter, fetchExpressionRates, fetchExpressionMeans, fetchExpressionCVs, fetchExpressionFolds } from '../clients';
-import { useTableStore } from '../stores/config';
+import { useConfigStore } from '../stores/config';
 
 const Plots = () => {
-  const { table } = useTableStore();
+  const { table, connectionType, connectionURL } = useConfigStore();
 
   const plotColRef = useRef<HTMLDivElement>(null);
   const umapLegendRef = useRef<HTMLDivElement>(null);
@@ -77,18 +77,51 @@ const Plots = () => {
     setGene(gene);
   }
 
-  const coordinator = vg.coordinator();
-  // const coordinator = useRef(vg.coordinator()).current;
-  // vg.coordinator().databaseConnector(vg.socketConnector());
 
-  const geneExprAPI = vg.createAPIContext({coordinator: new vg.Coordinator(vg.socketConnector())});
-  const geneMeanAPI = vg.createAPIContext({coordinator: new vg.Coordinator(vg.socketConnector())});
-  const geneCVAPI = vg.createAPIContext({coordinator: new vg.Coordinator(vg.socketConnector())});
-  const geneFoldAPI = vg.createAPIContext({coordinator: new vg.Coordinator(vg.socketConnector())});
+  // Create coordinators with useMemo to avoid recreating on every render
+  const coordinators = useMemo(() => {
+    let baseConnector;
+    
+    if (connectionType === 'wasm') {
+      baseConnector = vg.wasmConnector();
+    } else {
+      baseConnector = vg.socketConnector(connectionURL as any);
+    }
+    
+    const coordinator = vg.coordinator();
+    coordinator.databaseConnector(baseConnector);
+    
+    // For WASM, load the parquet files
+    if (connectionType === 'wasm') {
+      const baseUrl = 'https://cdn.jsdelivr.net/gh/sanghoonio/tessera@main/db/sample'
+      coordinator.exec(vg.loadParquet(table, `${baseUrl}/${table}.parquet`));
+      coordinator.exec(vg.loadParquet(`${table}_expr`, `${baseUrl}/${table}_expr.parquet`));
+    }
+    
+    return {
+      coordinator,
+      geneExprAPI: vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)}),
+      geneMeanAPI: vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)}),
+      geneCVAPI: vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)}),
+      geneFoldAPI: vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)}),
+      umapAPI: vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)}),
+      qcAPI: vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)}),
+      saturationAPI: vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)})
+    };
+  }, [connectionType, connectionURL, table]);
+  
+  // Destructure for easier use
+  const { 
+    coordinator, 
+    geneExprAPI, 
+    geneMeanAPI, 
+    geneCVAPI, 
+    geneFoldAPI, 
+    umapAPI, 
+    qcAPI, 
+    saturationAPI 
+  } = coordinators;
 
-  const umapAPI = vg.createAPIContext({coordinator: new vg.Coordinator(vg.socketConnector())});
-  const qcAPI = vg.createAPIContext({coordinator: new vg.Coordinator(vg.socketConnector())});
-  const saturationAPI = vg.createAPIContext({coordinator: new vg.Coordinator(vg.socketConnector())});
 
   const $legendBrush = useRef(vg.Selection.crossfilter()).current;
   const $umapBrush = useRef(vg.Selection.intersect()).current;
