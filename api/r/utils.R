@@ -38,8 +38,8 @@ clean_sql_names <- function(names) {
 }
 
 load_test <- function(con) {
-  dbExecute(con, "CREATE OR REPLACE TABLE sample AS SELECT * FROM read_parquet('../db/sample/sample.parquet')")
-  dbExecute(con, "CREATE OR REPLACE TABLE sample_expr AS SELECT * FROM read_parquet('../db/sample/sample_expr.parquet')")
-  dbExecute(con, "CREATE OR REPLACE TABLE sample_qc_subset AS SELECT * FROM read_parquet('../db/sample/sample_qc_subset.parquet')")
-  dbExecute(con, "CREATE OR REPLACE TABLE sample_qc_subset_expr AS SELECT * FROM read_parquet('../db/sample/sample_qc_subset_expr.parquet')")
+  dbExecute(con, "CREATE OR REPLACE TABLE sample_unfiltered AS SELECT * FROM read_parquet('../db/sample/sample_unfiltered.parquet')")
+  dbExecute(con, "CREATE OR REPLACE TABLE sample_unfiltered_expr AS SELECT * FROM read_parquet('../db/sample/sample_unfiltered_expr.parquet')")
+  dbExecute(con, "CREATE OR REPLACE TABLE sample_qc_filtered AS SELECT * FROM read_parquet('../db/sample/sample_qc_filtered.parquet')")
+  dbExecute(con, "CREATE OR REPLACE TABLE sample_qc_filtered_expr AS SELECT * FROM read_parquet('../db/sample/sample_qc_filtered_expr.parquet')")
 }

@@ -124,13 +124,14 @@ function Config() {
                 aria-label='groupInput'
                 value={tableInput}
                 onChange={(e) => setTableInput(e.target.value)}
+                disabled={serverTables.length === 0}
               >
                 {serverTables.length === 0 && <option value='' >No tables found.</option>}
                 {serverTables.map((serverTable: string, index: number) => <option value={serverTable} key={index}>{serverTable}</option>)}
               </select>
             )}
 
-            <div className='d-flex mt-4'>
+            <div className='d-flex align-items-end mt-4'>
               <button 
                 className='btn btn-secondary btn-sm'
                 onClick={() => {
@@ -153,6 +154,14 @@ function Config() {
               >
                 Cancel
               </button>
+              <span className='text-ss text-muted fst-italic ms-auto'>Want to use your own data? Follow the instructions <a
+                  className='text-decoration-none cursor-pointer text-ss text-dark fst-italic fw-semibold'
+                  href='https://github.com/sanghoonio/tessera/tree/main/api'
+                  target='_blank'
+                  rel='noopener noreferrer'
+                >
+                  here
+                </a> to run your own local WebSocket server.</span>
             </div>
           </div>
         </div>

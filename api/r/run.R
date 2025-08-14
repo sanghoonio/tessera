@@ -12,11 +12,9 @@ run <- function() {
   con <- dbConnect(duckdb(), dbdir = db_path)
   on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
   
-  # if (db_path == ':memory:') {
-  #   load_test(con)
-  # }
-  
-  load_test(con)
+  if (db_path == ':memory:') {
+    load_test(con)
+  }
   
   cache <- cache_mem()
   create_server(con, cache)

@@ -149,7 +149,7 @@ export const createUmapCategories = (
     'excluded': {
       title: 'Filter Exclusion', 
       legendTitle: 'Filter Exclusion', 
-      fillValue: transparentGray, 
+      fillValue: vg.sql`'Included in Selection'`, 
       colorScale: 'ordinal', 
       colorRange: [transparentGray, transparentRed],
       colorDomain: ['Included in Selection', 'Excluded by Selection'],

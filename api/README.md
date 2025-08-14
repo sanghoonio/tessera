@@ -26,6 +26,8 @@ Run the server from the command line:
 Rscript R/run.R ../db/local.duckdb
 ```
 
-If you don't provide a path, it will use an in-memory DuckDB database.
-
 The server will start and listen on `ws://localhost:3000` and `http://localhost:3000`. Access the UI by navigating to `http://localhost:3000` in your browser.
+
+If you don't provide a path, it will use an in-memory DuckDB database. To add your own data, first process your data as shown in the example R script located at `/db/generate_tutorial.R`. Feel free to write the parquet files anywhere on disk. Next, write your data to a local DuckDB database by following the example script located at `/db/load_duckdb.R`. If you provide this database path when running your server, you will be able to select your data from the config page in the UI and view it, as long as it was formatted correctly.
+
+
