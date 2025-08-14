@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import * as vg from '@uwdata/vgplot';
+import toast from 'react-hot-toast';
+
 import { useConfigStore } from '../../stores/config';
 
 
@@ -13,7 +16,45 @@ function Config() {
     setConnectionURL 
   } = useConfigStore();
   const [tableInput, setTableInput] = useState(table);
+  const [connectionTypeInput, setConnectionTypeInput] = useState(connectionType);
   const [connectionURLInput, setConnectionURLInput] = useState(connectionURL);
+  const [serverTables, setServerTables] = useState<string[]>([]);
+  const [connectionError, setConnectionError] = useState(false);
+
+  const wasmTables = ['sample', 'sample_qc_subset'];
+
+  useEffect(() => {
+    if (connectionTypeInput === 'websocket') {
+      console.log(connectionURLInput)
+      const fetchTables = async () => {
+        try {
+          const api = vg.createAPIContext({
+            coordinator: new vg.Coordinator(vg.socketConnector(connectionURLInput as any))
+          });
+          
+          const result = await api.context.coordinator.query(`
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'main'
+            ORDER BY table_name
+          `) as any;
+
+          const formattedResult = result?.toArray()?.map((tableItem: {table_name: string}) => tableItem.table_name).filter((name: string) => (!name.includes('_expr')));
+          console.log(formattedResult)
+          setServerTables(formattedResult)
+          setConnectionError(false);
+          if (formattedResult.length > 0) setTableInput(formattedResult[0]);
+        } catch (error) {
+          console.error(error)
+          setConnectionError(true);
+          setServerTables([]);
+        }
+      };
+
+      fetchTables();
+    }
+    
+  }, [connectionTypeInput, connectionURLInput])
 
   return (
     <div className='row p-2 p-lg-4 mt-4 mt-lg-0'>
@@ -30,11 +71,18 @@ function Config() {
                 <select 
                   className='form-select form-select-sm'
                   aria-label='connectionType'
-                  value={connectionType}
+                  value={connectionTypeInput}
                   onChange={(e) => {
-                    setConnectionType(e.target.value)
-                    setTableInput(table)
-                    setConnectionURLInput(connectionURL)
+                    setConnectionTypeInput(e.target.value)
+                    switch (e.target.value) {
+                      case 'websocket':
+                        setTableInput(table)
+                        setConnectionURLInput(connectionURL)
+                        break
+                      case 'wasm':
+                        setTableInput(wasmTables[0])
+                        break
+                    }
                   }}
                 >
                   <option value='wasm'>WebAssembly (in-browser)</option>
@@ -42,7 +90,7 @@ function Config() {
                 </select>
               </div>
               <div className='flex-grow-1 ms-2'>
-                {connectionType === 'websocket' && (
+                {connectionTypeInput === 'websocket' && (
                   <>
                     <p className='text-ss mt-3 mb-0 fw-bold'>Server URL</p>
                     <input
@@ -58,42 +106,54 @@ function Config() {
             </div>
 
             <p className='text-ss mt-3 mb-0 fw-bold'>Source Table Name</p>
-            {connectionType === 'wasm' ? (
+            {connectionTypeInput === 'wasm' ? (
               <select 
                 className='form-select form-select-sm w-25'
                 aria-label='groupSelect'
-                value={table}
-                onChange={(e) => setTable(e.target.value)}
+                value={tableInput}
+                onChange={(e) => setTableInput(e.target.value)}
               >
-                <option value='sample'>sample</option>
-                <option value='sample_qc_subset'>sample_qc_subset</option>
+                {wasmTables.map((wasmTable: string, index: number) => <option value={wasmTable} key={index}>{wasmTable}</option>)}
                 {/* <option value='ct'>CT</option>
                 <option value='sc2'>SC2</option>
                 <option value='sc4'>SC4</option> */}
               </select>
             ) : (
-              <input
-                className='form-control form-control-sm'
+              <select
+                className='form-select form-select-sm w-25'
                 aria-label='groupInput'
                 value={tableInput}
                 onChange={(e) => setTableInput(e.target.value)}
               >
-              </input>
+                {serverTables.length === 0 && <option value='' >No tables found.</option>}
+                {serverTables.map((serverTable: string, index: number) => <option value={serverTable} key={index}>{serverTable}</option>)}
+              </select>
             )}
 
-            {connectionType === 'websocket' && (
-              <div className='d-flex'>
-                <button 
-                  className='btn btn-secondary btn-sm mt-4 ms-auto'
-                  onClick={() => {
-                    setTable(tableInput)
-                    setConnectionURL(connectionURLInput)
-                  }}
-                >
-                  Connect
-                </button>
-              </div>
-            )}
+            <div className='d-flex mt-4'>
+              <button 
+                className='btn btn-secondary btn-sm'
+                onClick={() => {
+                  setTable(tableInput)
+                  setConnectionType(connectionTypeInput)
+                  setConnectionURL(connectionURLInput)
+                  toast.success('Config Saved.')
+                }}
+                disabled={(connectionTypeInput === 'websocket') && (serverTables.length === 0) && connectionError}
+              >
+                Save
+              </button>
+              <button 
+                className='btn btn-danger btn-sm ms-1'
+                onClick={() => {
+                  setTableInput(table)
+                  setConnectionTypeInput(connectionType)
+                  setConnectionURLInput(connectionURL)
+                }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       </div>

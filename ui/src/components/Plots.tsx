@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import Select from 'react-select'
 import * as vg from '@uwdata/vgplot';
+// import { useLocation } from 'react-router-dom';
 
 import { createUmapCategories, bootstrapSelectStyles, tableau20 } from '../utils';
 import { fetchGeneCols, fetchColumnValues, fetchColumnCountsFilter, fetchExpressionRates, fetchExpressionMeans, fetchExpressionCVs, fetchExpressionFolds } from '../clients';
 import { useConfigStore } from '../stores/config';
 
 const Plots = () => {
+  // const location = useLocation()
   const { table, connectionType, connectionURL } = useConfigStore();
 
   const plotColRef = useRef<HTMLDivElement>(null);
@@ -58,6 +60,9 @@ const Plots = () => {
     cellCounts: {}
   });
 
+  const [mainIsLoading, setMainIsLoading] = useState(connectionType === 'wasm');
+  const [exprIsLoading, setExprIsLoading] = useState(connectionType === 'wasm');
+
   const geneOptions = useMemo(() => 
     genes.map((gene: string) => ({
       value: gene, 
@@ -77,8 +82,6 @@ const Plots = () => {
     setGene(gene);
   }
 
-
-  // Create coordinators with useMemo to avoid recreating on every render
   const coordinators = useMemo(() => {
     let baseConnector;
     
@@ -88,15 +91,20 @@ const Plots = () => {
       baseConnector = vg.socketConnector(connectionURL as any);
     }
     
-    const coordinator = vg.coordinator();
+    const coordinator = new vg.Coordinator(baseConnector);
     coordinator.databaseConnector(baseConnector);
     
-    // For WASM, load the parquet files
     if (connectionType === 'wasm') {
-      const baseUrl = 'https://cdn.jsdelivr.net/gh/sanghoonio/tessera@main/db/sample'
-      coordinator.exec(vg.loadParquet(table, `${baseUrl}/${table}.parquet`));
-      coordinator.exec(vg.loadParquet(`${table}_expr`, `${baseUrl}/${table}_expr.parquet`));
-    }
+      // const baseURL = 'https://cdn.jsdelivr.net/gh/sanghoonio/tessera@master/db/sample'
+      const baseURL = window.location.origin + window.location.pathname.replace(/\/$/, '').replace(location.pathname, '')
+      coordinator.exec(vg.loadParquet(table, `${baseURL}/${table}.parquet`))
+        .then(() => setMainIsLoading(false))
+        .catch(err => console.error('main table load error:', err));
+        
+      coordinator.exec(vg.loadParquet(`${table}_expr`, `${baseURL}/${table}_expr.parquet`))
+        .then(() => setExprIsLoading(false))
+        .catch(err => console.error('expression table load error:', err));
+      }
     
     return {
       coordinator,
@@ -110,7 +118,6 @@ const Plots = () => {
     };
   }, [connectionType, connectionURL, table]);
   
-  // Destructure for easier use
   const { 
     coordinator, 
     geneExprAPI, 
@@ -121,7 +128,6 @@ const Plots = () => {
     qcAPI, 
     saturationAPI 
   } = coordinators;
-
 
   const $legendBrush = useRef(vg.Selection.crossfilter()).current;
   const $umapBrush = useRef(vg.Selection.intersect()).current;
@@ -346,7 +352,7 @@ const Plots = () => {
       geneClient.destroy();
       geneExprAPI.context.coordinator.clear({ clients: true, cache: true });
     }
-  }, [genes, showGeneExpr]);
+  }, [genes, showGeneExpr, connectionType, connectionURL, table]);
 
   useEffect(() => { // set top expressed genes in selection
     if (!showGeneMean || genes.length === 0 || !geneMeanAPI.context.coordinator) return;
@@ -355,7 +361,7 @@ const Plots = () => {
       geneClient.destroy();
       geneMeanAPI.context.coordinator.clear({ clients: true, cache: true });
     }
-  }, [genes, showGeneMean]);
+  }, [genes, showGeneMean, connectionType, connectionURL, table]);
 
   useEffect(() => { // set top cv genes in selection
     if (!showGeneCV || genes.length === 0 || !geneCVAPI.context.coordinator) return;
@@ -364,7 +370,7 @@ const Plots = () => {
       geneClient.destroy();
       geneCVAPI.context.coordinator.clear({ clients: true, cache: true });
     }
-  }, [genes, showGeneCV]);
+  }, [genes, showGeneCV, connectionType, connectionURL, table]);
 
   useEffect(() => { // set top fold genes in selection
     if (!showGeneFold || genes.length === 0 || !geneFoldAPI.context.coordinator) return;
@@ -373,19 +379,19 @@ const Plots = () => {
       geneClient.destroy();
       geneFoldAPI.context.coordinator.clear({ clients: true, cache: true });
     }
-  }, [genes, showGeneFold]);
+  }, [genes, showGeneFold, connectionType, connectionURL, table]);
 
   useEffect(() => { // set cell type counts in selection
     if (!showCellTypeCount) return;
     const client = fetchColumnCountsFilter(coordinator, table, $allFilter, 'cluster', cellTypes, setSelectedCellTypeCounts);
     return () => client.destroy()
-  }, [cellTypes, showCellTypeCount]);
+  }, [cellTypes, showCellTypeCount, connectionType, connectionURL, table]);
 
   useEffect(() => { // set sample counts in selection
     if (!showSampleCount) return;
     const client = fetchColumnCountsFilter(coordinator, table, $allFilter, 'sample', samples, setSelectedSampleCounts);
     return () => client.destroy()
-  }, [samples, showSampleCount]);
+  }, [samples, showSampleCount, connectionType, connectionURL, table]);
 
   useEffect(() => { // plot umap if any dependencies change
     if (!showUMAP) return;
@@ -394,7 +400,7 @@ const Plots = () => {
     return () => {
       umapAPI.context.coordinator.clear({ clients: true, cache: true });
     }
-  }, [umapFill, gene, gene2, containerWidth, geneComparisonMode, showUMAP]);
+  }, [umapFill, gene, gene2, containerWidth, geneComparisonMode, showUMAP, connectionType, connectionURL, table]);
 
   useEffect(() => { // plot qc if any dependences change
     if (!showQCDist) return;
@@ -402,7 +408,7 @@ const Plots = () => {
     return () => {
       qcAPI.context.coordinator.clear({ clients: true, cache: true });
     }
-  }, [samples, showQCDist]);
+  }, [samples, showQCDist, connectionType, connectionURL, table]);
 
   useEffect(() => { // plot saturation if any dependencies change
     if (!showSaturation) return;
@@ -410,7 +416,7 @@ const Plots = () => {
     return () => {
       saturationAPI.context.coordinator.clear({ clients: true, cache: true });
     }
-  }, [samples, showSaturation]);
+  }, [samples, showSaturation, connectionType, connectionURL, table]);
 
   useEffect(() => { // container width watcher
     const cardBody = plotColRef.current;
@@ -424,518 +430,526 @@ const Plots = () => {
   }, []);
 
   return (
-    <div className='row'>
-      <div className='col-9 ps-0 pe-3'>
-        <div className='card mb-3 shadow-sm'>
-          <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
-            <span className='fw-bold'>UMAP</span>
-            {/* <button 
-              className='btn btn-danger btn-xs shadow-sm ms-auto cursor-pointer'
-              onClick={handleReset}
-            >
-              Reset
-            </button> */}
-            <a 
-              className='text-black fs-5 ms-auto cursor-pointer stretched-link'
-              onClick={() => setShowUMAP(!showUMAP)}
-              type='button'
-              data-bs-toggle='collapse'
-              data-bs-target='#collapseUMAP'
-              aria-expanded={showUMAP}
-              aria-controls='collapseUMAP'
-            >
-              {showUMAP ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
-            </a>
-          </div>
-          <div id='collapseUMAP' className='collapse show'>
-            <div className='card-body'>
-              <div className='' ref={umapRef}></div>
-              {showUMAP && (
-                <div 
-                  className={`border px-2 rounded shadow-sm bg-white ${umapCategory.colorScale === 'ordinal' && 'pt-1'} ${legendPosition === 'off' ? 'd-none' : 'd-inline-block'}`}
-                  ref={umapLegendRef}
-                  style={{
-                    position: 'absolute',
-                    right: 10,
-                    ...(legendPosition === 'topright' && { top: 45 }),
-                    ...(legendPosition === 'bottomright' && { bottom: 62 })
-                  }}
-                ></div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className='card mb-3 shadow-sm'>
-          <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
-            <span className='fw-bold'>Normalized Sample QC Distributions</span>
-            <a 
-              className='text-black fs-5 ms-auto cursor-pointer stretched-link'
-              onClick={() => {
-                if (showQCDist) { // reset brushes on hide only
-                  handleReset();
-                  qcAPI.context.coordinator.clear({ clients: true, cache: true });
-                }
-                setShowQCDist(!showQCDist);
-              }}
-              type='button'
-              data-bs-toggle='collapse'
-              data-bs-target='#collapseQCDist'
-              aria-expanded={showQCDist}
-              aria-controls='collapseQCDist'
-            >
-              {showQCDist ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
-            </a>
-          </div>
-          <div id='collapseQCDist' className='collapse show'>
-            <div className='card-body pt-1 px-0'>
-              <div className='d-flex flex-row justify-content-center align-items-center border-bottom py-1'>
-                <div className='d-flex flex-grow-1 justify-content-center' ref={sampleLegendRef}></div>
-                <div className='me-3 text-center' style={{width: '80px'}}>
-                  <p className='text-xs mb-0 fw-bold'>{umapCategories.sample.title}</p>
-                </div>
-              </div>
-              <div className='d-flex flex-row justify-content-between align-items-center border-bottom py-2'>
-                <div className='flex-grow-1' style={{marginLeft: '-.75rem', marginRight: '2rem'}} ref={nFeatureRef}></div>
-                <div className='me-3 text-center' style={{width: '80px'}}>
-                  <p className='text-xs mb-0 fw-medium'>{umapCategories.nFeature_RNA.title}</p>
-                  <p className='text-xs mb-0'>
-                    <strong>Min: </strong>
-                    {nFeatureValues ? nFeatureValues[0].toFixed(1) : '0'}
-                  </p>
-                  <p className='text-xs mb-0'>
-                    <strong>Max: </strong>
-                    {nFeatureValues ? nFeatureValues[1].toFixed(1) : 'Inf'}
-                  </p>
-                </div>
-              </div>
-              <div className='d-flex flex-row justify-content-between align-items-center border-bottom py-2'>
-                <div className='flex-grow-1' style={{marginLeft: '-0.75rem', marginRight: '2rem'}} ref={nCountRef}></div>
-                <div className='me-3 text-center' style={{width: '80px'}}>
-                  <p className='text-xs mb-0 fw-medium'>{umapCategories.nCount_RNA.title}</p>
-                  <p className='text-xs mb-0'>
-                    <strong>Min: </strong>
-                    {nCountValues ? nCountValues[0].toFixed(1) : '0'}
-                  </p>
-                  <p className='text-xs mb-0'>
-                    <strong>Max: </strong>
-                    {nCountValues ? nCountValues[1].toFixed(1) : 'Inf'}
-                  </p>
-                </div>
-              </div>
-              <div className='d-flex flex-row justify-content-between align-items-center pt-2'>
-                <div className='flex-grow-1' style={{marginLeft: '-0.75rem', marginRight: '2rem'}} ref={percentMTRef}></div>
-                <div className='me-3 text-center' style={{width: '80px'}}>
-                  <p className='text-xs mb-0 fw-medium'>{umapCategories.percent_mt.title}</p>
-                  <p className='text-xs mb-0'>
-                    <strong>Min: </strong>
-                    {percentMTValues ? percentMTValues[0].toFixed(1) : '0'}
-                  </p>
-                  <p className='text-xs mb-0'>
-                    <strong>Max: </strong>
-                    {percentMTValues ? percentMTValues[1].toFixed(1) : 'Inf'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className='card mb-3 shadow-sm'>
-          <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
-            <span className='fw-bold'>Saturation Curves</span>
-            <a 
-              className='text-black fs-5 ms-auto cursor-pointer stretched-link'
-              onClick={() => {
-                if (showSaturation) { // reset brushes on hide only
-                  handleReset();
-                  saturationAPI.context.coordinator.clear({ clients: true, cache: true });
-                }
-                setShowSaturation(!showSaturation);
-              }}
-              type='button'
-              data-bs-toggle='collapse'
-              data-bs-target='#collapseSaturation'
-              aria-expanded={showSaturation}
-              aria-controls='collapseSaturation'
-            >
-              {showSaturation ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
-            </a>
-          </div>
-          <div id='collapseSaturation' className='collapse'>
-            <div className='card-body pt-1 px-0'>
-              <div className='d-flex flex-row justify-content-center align-items-center border-bottom py-1'>
-                <div className='d-flex flex-grow-1 justify-content-center' ref={sampleSaturationLegendRef}></div>
-                <div className='me-3 text-center' style={{width: '80px'}}>
-                  <p className='text-xs mb-0 fw-bold'>{umapCategories.sample.title}</p>
-                </div>
-              </div>
-              <div className='px-3 py-3 border-bottom' ref={featureUMICurveRef}></div>
-              <div className='px-3 pt-3' ref={featureCurveRef}></div>
-            </div>
-          </div>
-        </div>
-
-        <div className='card my-0 py-0' style={{visibility: 'hidden'}}>
-          <div className='card-body my-0 py-0' ref={plotColRef}>
-          </div>
-        </div>
-      
-      </div>
-      
-      <div className='col-3 px-0'>
-
-        <div className='card mt-0 mb-3 shadow-sm'>
-          <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
-            <span className='fw-bold'>Settings</span>
-            <a 
-              className='text-black fs-5 ms-auto cursor-pointer stretched-link'
-              onClick={() => setShowSettings(!showSettings)}
-              type='button'
-              data-bs-toggle='collapse'
-              data-bs-target='#collapseSettings'
-              aria-expanded={showSettings}
-              aria-controls='collapseSettings'
-            >
-              {showSettings ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
-            </a>
-          </div>
-          <div id='collapseSettings' className='collapse show'>
-            <div className='card-body'>
-            <button 
-              className='btn btn-danger btn-sm mb-3 w-100 fw-bold'
-              onClick={handleReset}
-            >
-              Reset Plots
-            </button>
-
-            <p className='text-ss mb-0 fw-bold'>Fill</p>
-            <select 
-              className='form-select form-select-sm'
-              aria-label='umapFill'
-              value={umapFill}
-              onChange={(e) => setUmapFill(e.target.value)}
-            >
-              {Object.keys(umapCategories).map((key) => (
-                <option key={key} value={key}>{umapCategories[key as keyof typeof umapCategories].title}</option>
-              ))}
-            </select>
+    <>
+      {(mainIsLoading && exprIsLoading) ? (
+        <p>Loading...</p>
+      ) : (
+        <div className='row'>
+          <div className='col-9 ps-0 pe-3'>
             
-            {(umapFill === 'gene' || umapFill === 'genes') && (
-              <>
-                <p className='text-ss mt-3 mb-0 fw-bold'>Gene</p>
-                <Select 
-                  className=''
-                  options={geneOptions} 
-                  value={{value: gene, label: gene.replace('gene_', '')}} 
-                  onChange={(selectedOption) => setGene(selectedOption?.value || '')}
-                  isSearchable
-                  styles={bootstrapSelectStyles}
-                />
-              </>
-            )}
+            <div className='card mb-3 shadow-sm'>
+              <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
+                <span className='fw-bold'>UMAP</span>
+                {/* <button 
+                  className='btn btn-danger btn-xs shadow-sm ms-auto cursor-pointer'
+                  onClick={handleReset}
+                >
+                  Reset
+                </button> */}
+                <a 
+                  className='text-black fs-5 ms-auto cursor-pointer stretched-link'
+                  onClick={() => setShowUMAP(!showUMAP)}
+                  type='button'
+                  data-bs-toggle='collapse'
+                  data-bs-target='#collapseUMAP'
+                  aria-expanded={showUMAP}
+                  aria-controls='collapseUMAP'
+                >
+                  {showUMAP ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
+                </a>
+              </div>
+              <div id='collapseUMAP' className='collapse show'>
+                <div className='card-body'>
+                  <div className='' ref={umapRef}></div>
+                  {showUMAP && (
+                    <div 
+                      className={`border px-2 rounded shadow-sm bg-white ${umapCategory.colorScale === 'ordinal' && 'pt-1'} ${legendPosition === 'off' ? 'd-none' : 'd-inline-block'}`}
+                      ref={umapLegendRef}
+                      style={{
+                        position: 'absolute',
+                        right: 10,
+                        ...(legendPosition === 'topright' && { top: 45 }),
+                        ...(legendPosition === 'bottomright' && { bottom: 62 })
+                      }}
+                    ></div>
+                  )}
+                </div>
+              </div>
+            </div>
 
-            {umapFill === 'genes' && (
-              <>
-                <p className='text-ss mt-3 mb-0 fw-bold'>Gene 2</p>
-                  <Select 
-                    options={geneOptions} 
-                    value={{value: gene2, label: gene2.replace('gene_', '')}} 
-                    onChange={(selectedOption) => setGene2(selectedOption?.value || '')}
-                    isSearchable
-                    styles={bootstrapSelectStyles}
-                  />
+            <div className='card mb-3 shadow-sm'>
+              <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
+                <span className='fw-bold'>Normalized Sample QC Distributions</span>
+                <a 
+                  className='text-black fs-5 ms-auto cursor-pointer stretched-link'
+                  onClick={() => {
+                    if (showQCDist) { // reset brushes on hide only
+                      handleReset();
+                      qcAPI.context.coordinator.clear({ clients: true, cache: true });
+                    }
+                    setShowQCDist(!showQCDist);
+                  }}
+                  type='button'
+                  data-bs-toggle='collapse'
+                  data-bs-target='#collapseQCDist'
+                  aria-expanded={showQCDist}
+                  aria-controls='collapseQCDist'
+                >
+                  {showQCDist ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
+                </a>
+              </div>
+              <div id='collapseQCDist' className='collapse show'>
+                <div className='card-body pt-1 px-0'>
+                  <div className='d-flex flex-row justify-content-center align-items-center border-bottom py-1'>
+                    <div className='d-flex flex-grow-1 justify-content-center' ref={sampleLegendRef}></div>
+                    <div className='me-3 text-center' style={{width: '80px'}}>
+                      <p className='text-xs mb-0 fw-bold'>{umapCategories.sample.title}</p>
+                    </div>
+                  </div>
+                  <div className='d-flex flex-row justify-content-between align-items-center border-bottom py-2'>
+                    <div className='flex-grow-1' style={{marginLeft: '-.75rem', marginRight: '2rem'}} ref={nFeatureRef}></div>
+                    <div className='me-3 text-center' style={{width: '80px'}}>
+                      <p className='text-xs mb-0 fw-medium'>{umapCategories.nFeature_RNA.title}</p>
+                      <p className='text-xs mb-0'>
+                        <strong>Min: </strong>
+                        {nFeatureValues ? nFeatureValues[0].toFixed(1) : '0'}
+                      </p>
+                      <p className='text-xs mb-0'>
+                        <strong>Max: </strong>
+                        {nFeatureValues ? nFeatureValues[1].toFixed(1) : 'Inf'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className='d-flex flex-row justify-content-between align-items-center border-bottom py-2'>
+                    <div className='flex-grow-1' style={{marginLeft: '-0.75rem', marginRight: '2rem'}} ref={nCountRef}></div>
+                    <div className='me-3 text-center' style={{width: '80px'}}>
+                      <p className='text-xs mb-0 fw-medium'>{umapCategories.nCount_RNA.title}</p>
+                      <p className='text-xs mb-0'>
+                        <strong>Min: </strong>
+                        {nCountValues ? nCountValues[0].toFixed(1) : '0'}
+                      </p>
+                      <p className='text-xs mb-0'>
+                        <strong>Max: </strong>
+                        {nCountValues ? nCountValues[1].toFixed(1) : 'Inf'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className='d-flex flex-row justify-content-between align-items-center pt-2'>
+                    <div className='flex-grow-1' style={{marginLeft: '-0.75rem', marginRight: '2rem'}} ref={percentMTRef}></div>
+                    <div className='me-3 text-center' style={{width: '80px'}}>
+                      <p className='text-xs mb-0 fw-medium'>{umapCategories.percent_mt.title}</p>
+                      <p className='text-xs mb-0'>
+                        <strong>Min: </strong>
+                        {percentMTValues ? percentMTValues[0].toFixed(1) : '0'}
+                      </p>
+                      <p className='text-xs mb-0'>
+                        <strong>Max: </strong>
+                        {percentMTValues ? percentMTValues[1].toFixed(1) : 'Inf'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-                  <p className='text-ss mt-3 mb-0 fw-bold'>Gene Comparison</p>
+            <div className='card mb-3 shadow-sm'>
+              <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
+                <span className='fw-bold'>Saturation Curves</span>
+                <a 
+                  className='text-black fs-5 ms-auto cursor-pointer stretched-link'
+                  onClick={() => {
+                    if (showSaturation) { // reset brushes on hide only
+                      handleReset();
+                      saturationAPI.context.coordinator.clear({ clients: true, cache: true });
+                    }
+                    setShowSaturation(!showSaturation);
+                  }}
+                  type='button'
+                  data-bs-toggle='collapse'
+                  data-bs-target='#collapseSaturation'
+                  aria-expanded={showSaturation}
+                  aria-controls='collapseSaturation'
+                >
+                  {showSaturation ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
+                </a>
+              </div>
+              <div id='collapseSaturation' className='collapse'>
+                <div className='card-body pt-1 px-0'>
+                  <div className='d-flex flex-row justify-content-center align-items-center border-bottom py-1'>
+                    <div className='d-flex flex-grow-1 justify-content-center' ref={sampleSaturationLegendRef}></div>
+                    <div className='me-3 text-center' style={{width: '80px'}}>
+                      <p className='text-xs mb-0 fw-bold'>{umapCategories.sample.title}</p>
+                    </div>
+                  </div>
+                  <div className='px-3 py-3 border-bottom' ref={featureUMICurveRef}></div>
+                  <div className='px-3 pt-3' ref={featureCurveRef}></div>
+                </div>
+              </div>
+            </div>
+
+            <div className='card my-0 py-0' style={{visibility: 'hidden'}}>
+              <div className='card-body my-0 py-0' ref={plotColRef}>
+              </div>
+            </div>
+          
+          </div>
+          
+          <div className='col-3 px-0'>
+
+            <div className='card mt-0 mb-3 shadow-sm'>
+              <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
+                <span className='fw-bold'>Settings</span>
+                <a 
+                  className='text-black fs-5 ms-auto cursor-pointer stretched-link'
+                  onClick={() => setShowSettings(!showSettings)}
+                  type='button'
+                  data-bs-toggle='collapse'
+                  data-bs-target='#collapseSettings'
+                  aria-expanded={showSettings}
+                  aria-controls='collapseSettings'
+                >
+                  {showSettings ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
+                </a>
+              </div>
+              <div id='collapseSettings' className='collapse show'>
+                <div className='card-body'>
+                <button 
+                  className='btn btn-danger btn-sm mb-3 w-100 fw-bold'
+                  onClick={handleReset}
+                >
+                  Reset Plots
+                </button>
+
+                <p className='text-ss mb-0 fw-bold'>Fill</p>
+                <select 
+                  className='form-select form-select-sm'
+                  aria-label='umapFill'
+                  value={umapFill}
+                  onChange={(e) => setUmapFill(e.target.value)}
+                >
+                  {Object.keys(umapCategories).map((key) => (
+                    <option key={key} value={key}>{umapCategories[key as keyof typeof umapCategories].title}</option>
+                  ))}
+                </select>
+                
+                {(umapFill === 'gene' || umapFill === 'genes') && (
+                  <>
+                    <p className='text-ss mt-3 mb-0 fw-bold'>Gene</p>
+                    <Select 
+                      className=''
+                      options={geneOptions} 
+                      value={{value: gene, label: gene.replace('gene_', '')}} 
+                      onChange={(selectedOption) => setGene(selectedOption?.value || '')}
+                      isSearchable
+                      styles={bootstrapSelectStyles}
+                    />
+                  </>
+                )}
+
+                {umapFill === 'genes' && (
+                  <>
+                    <p className='text-ss mt-3 mb-0 fw-bold'>Gene 2</p>
+                      <Select 
+                        options={geneOptions} 
+                        value={{value: gene2, label: gene2.replace('gene_', '')}} 
+                        onChange={(selectedOption) => setGene2(selectedOption?.value || '')}
+                        isSearchable
+                        styles={bootstrapSelectStyles}
+                      />
+
+                      <p className='text-ss mt-3 mb-0 fw-bold'>Gene Comparison</p>
+                      <select 
+                        className='form-select form-select-sm'
+                        value={geneComparisonMode}
+                        onChange={(e) => setGeneComparisonMode(e.target.value)}
+                      >
+                        {/* <option value='categorical'>Categorical</option> */}
+                        <option value='logfold'>Log Fold Change</option>
+                        <option value='geometric'>Geometric Mean</option>
+                        <option value='addition'>Simple Addition</option>
+                      </select>
+                    </>
+                  )}
+
+                  <p className='text-ss mt-3 mb-0 fw-bold'>Legend Position</p>
                   <select 
                     className='form-select form-select-sm'
-                    value={geneComparisonMode}
-                    onChange={(e) => setGeneComparisonMode(e.target.value)}
+                    aria-label='legendPosition'
+                    value={legendPosition}
+                    onChange={(e) => setLegendPosition(e.target.value)}
                   >
-                    {/* <option value='categorical'>Categorical</option> */}
-                    <option value='logfold'>Log Fold Change</option>
-                    <option value='geometric'>Geometric Mean</option>
-                    <option value='addition'>Simple Addition</option>
-                  </select>
-                </>
-              )}
-
-              <p className='text-ss mt-3 mb-0 fw-bold'>Legend Position</p>
-              <select 
-                className='form-select form-select-sm'
-                aria-label='legendPosition'
-                value={legendPosition}
-                onChange={(e) => setLegendPosition(e.target.value)}
-              >
-                <option value='topright'>Top Right</option>
-                <option value='bottomright'>Bottom Right</option>
-                <option value='off'>Hidden</option>
-              </select>              
+                    <option value='topright'>Top Right</option>
+                    <option value='bottomright'>Bottom Right</option>
+                    <option value='off'>Hidden</option>
+                  </select>              
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        <div className='card mb-3 shadow-sm'>
-          <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
-            <span className='fw-bold'>Cell Type Counts</span>
-            <a 
-              className='text-black fs-5 ms-auto cursor-pointer stretched-link'
-              onClick={() => setShowCellTypeCount(!showCellTypeCount)}
-              type='button'
-              data-bs-toggle='collapse'
-              data-bs-target='#collapseCellTypeCount'
-              aria-expanded={showCellTypeCount}
-              aria-controls='collapseCellTypeCount'
-            >
-              {showCellTypeCount ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
-            </a>
-          </div>
-          <div id='collapseCellTypeCount' className='collapse show'>
-            <div className='card-body p-0'>
-              <table className='table table-striped table-rounded text-xs'>
-                <thead>
-                  <tr>
-                    <th>Cell Type</th>
-                    <th>Selected Count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className='fst-italic fw-medium'>Total</td>
-                    <td className='fst-italic fw-medium'>{selectedCellTypeCounts.filteredCells}</td>
-                  </tr>
-                  {Object.keys(selectedCellTypeCounts.cellCounts).map((cluster: string, index: number) => (
-                    <tr key={index}>
-                      <td>{cluster}</td>
-                      <td>{String(Object.values(selectedCellTypeCounts.cellCounts)[index])}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div className='card mb-3 shadow-sm'>
-          <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
-            <span className='fw-bold'>Sample Counts</span>
-            <a 
-              className='text-black fs-5 ms-auto cursor-pointer stretched-link'
-              onClick={() => setShowSampleCount(!showSampleCount)}
-              type='button'
-              data-bs-toggle='collapse'
-              data-bs-target='#collapseSampleCount'
-              aria-expanded={showSampleCount}
-              aria-controls='collapseSampleCount'
-            >
-              {showSampleCount ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
-            </a>
-          </div>
-          <div id='collapseSampleCount' className='collapse show'>
-            <div className='card-body p-0'>
-              <table className='table table-striped table-rounded text-xs'>
-                <thead>
-                  <tr>
-                    <th>Sample</th>
-                    <th>Selected Count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className='fst-italic fw-medium'>Total</td>
-                    <td className='fst-italic fw-medium'>{selectedSampleCounts.filteredCells}</td>
-                  </tr>
-                  {Object.keys(selectedSampleCounts.cellCounts).map((cluster: string, index: number) => (
-                    <tr key={index}>
-                      <td>{cluster}</td>
-                      <td>{String(Object.values(selectedSampleCounts.cellCounts)[index])}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div className='card mb-3 shadow-sm'>
-          <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
-            <span className='fw-bold'>Most Expressed Genes</span>
-            <a 
-              className='text-black fs-5 ms-auto cursor-pointer stretched-link'
-              onClick={() => setShowGeneMean(!showGeneMean)}
-              type='button'
-              data-bs-toggle='collapse'
-              data-bs-target='#collapseGeneMean'
-              aria-expanded={showGeneMean}
-              aria-controls='collapseGeneMean'
-            >
-              {showGeneMean ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
-            </a>
-          </div>
-          <div id='collapseGeneMean' className='collapse'>
-            <div className='card-body p-0'>
-              <table className='table table-striped table-rounded table-hover text-xs'>
-                <thead>
-                  <tr>
-                    <th>Gene</th>
-                    <th>Mean Expression</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.keys(geneExpressionMeans).length > 0 ? (
-                    geneExpressionMeans.map((item, index) => (
-                      <tr key={index} className='cursor-pointer' onClick={() => handleClickGeneRow(item.gene)}>
-                        <td>{item.gene}</td>
-                        <td>{item.exprMean.toFixed(2)}</td>
+            <div className='card mb-3 shadow-sm'>
+              <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
+                <span className='fw-bold'>Cell Type Counts</span>
+                <a 
+                  className='text-black fs-5 ms-auto cursor-pointer stretched-link'
+                  onClick={() => setShowCellTypeCount(!showCellTypeCount)}
+                  type='button'
+                  data-bs-toggle='collapse'
+                  data-bs-target='#collapseCellTypeCount'
+                  aria-expanded={showCellTypeCount}
+                  aria-controls='collapseCellTypeCount'
+                >
+                  {showCellTypeCount ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
+                </a>
+              </div>
+              <div id='collapseCellTypeCount' className='collapse show'>
+                <div className='card-body p-0'>
+                  <table className='table table-striped table-rounded text-xs'>
+                    <thead>
+                      <tr>
+                        <th>Cell Type</th>
+                        <th>Selected Count</th>
                       </tr>
-                    ))
-                  ) : (
-                    <tr className='cursor-pointer'>
-                      <td className='fst-italic fw-medium'>None</td>
-                      <td className='fst-italic fw-medium'>No Cells Selected</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div className='card mb-3 shadow-sm'>
-          <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
-            <span className='fw-bold'>Most Frequent Genes</span>
-            <a 
-              className='text-black fs-5 ms-auto cursor-pointer stretched-link'
-              onClick={() => setShowGeneExpr(!showGeneExpr)}
-              type='button'
-              data-bs-toggle='collapse'
-              data-bs-target='#collapseGeneExpr'
-              aria-expanded={showGeneExpr}
-              aria-controls='collapseGeneExpr'
-            >
-              {showGeneExpr ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
-            </a>
-          </div>
-          <div id='collapseGeneExpr' className='collapse'>
-            <div className='card-body p-0'>
-              <table className='table table-striped table-rounded table-hover text-xs'>
-                <thead>
-                  <tr>
-                    <th>Gene</th>
-                    <th>Expression Rate</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.keys(geneExpressionRates).length > 0 ? (
-                    geneExpressionRates.map((item, index) => (
-                      <tr key={index} className='cursor-pointer' onClick={() => handleClickGeneRow(item.gene)}>
-                        <td>{item.gene}</td>
-                        <td>{item.exprRate.toFixed(2)}%</td>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className='fst-italic fw-medium'>Total</td>
+                        <td className='fst-italic fw-medium'>{selectedCellTypeCounts.filteredCells}</td>
                       </tr>
-                    ))
-                  ) : (
-                    <tr className='cursor-pointer'>
-                      <td className='fst-italic fw-medium'>None</td>
-                      <td className='fst-italic fw-medium'>No Cells Selected</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                      {Object.keys(selectedCellTypeCounts.cellCounts).map((cluster: string, index: number) => (
+                        <tr key={index}>
+                          <td>{cluster}</td>
+                          <td>{String(Object.values(selectedCellTypeCounts.cellCounts)[index])}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        <div className='card mb-3 shadow-sm'>
-          <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
-            <span className='fw-bold'>Most Variable Genes</span>
-            <a 
-              className='text-black fs-5 ms-auto cursor-pointer stretched-link'
-              onClick={() => setShowGeneCV(!showGeneCV)}
-              type='button'
-              data-bs-toggle='collapse'
-              data-bs-target='#collapseGeneCV'
-              aria-expanded={showGeneCV}
-              aria-controls='collapseGeneCV'
-            >
-              {showGeneCV ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
-            </a>
-          </div>
-          <div id='collapseGeneCV' className='collapse'>
-            <div className='card-body p-0'>
-              <table className='table table-striped table-rounded table-hover text-xs'>
-                <thead>
-                  <tr>
-                    <th>Gene</th>
-                    <th>Coefficient of Variation</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.keys(geneExpressionCVs).length > 0 ? (
-                    geneExpressionCVs.map((item, index) => (
-                      <tr key={index} className='cursor-pointer' onClick={() => handleClickGeneRow(item.gene)}>
-                        <td>{item.gene}</td>
-                        <td>{item.cv.toFixed(2)}</td>
+            <div className='card mb-3 shadow-sm'>
+              <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
+                <span className='fw-bold'>Sample Counts</span>
+                <a 
+                  className='text-black fs-5 ms-auto cursor-pointer stretched-link'
+                  onClick={() => setShowSampleCount(!showSampleCount)}
+                  type='button'
+                  data-bs-toggle='collapse'
+                  data-bs-target='#collapseSampleCount'
+                  aria-expanded={showSampleCount}
+                  aria-controls='collapseSampleCount'
+                >
+                  {showSampleCount ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
+                </a>
+              </div>
+              <div id='collapseSampleCount' className='collapse show'>
+                <div className='card-body p-0'>
+                  <table className='table table-striped table-rounded text-xs'>
+                    <thead>
+                      <tr>
+                        <th>Sample</th>
+                        <th>Selected Count</th>
                       </tr>
-                    ))
-                  ) : (
-                    <tr className='cursor-pointer'>
-                      <td className='fst-italic fw-medium'>None</td>
-                      <td className='fst-italic fw-medium'>No Cells Selected</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div className='card mb-3 shadow-sm'>
-          <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
-            <span className='fw-bold'>Most Unique Genes</span>
-            <a 
-              className='text-black fs-5 ms-auto cursor-pointer stretched-link'
-              onClick={() => setShowGeneFold(!showGeneFold)}
-              type='button'
-              data-bs-toggle='collapse'
-              data-bs-target='#collapseGeneFold'
-              aria-expanded={showGeneFold}
-              aria-controls='collapseGeneFold'
-            >
-              {showGeneFold ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
-            </a>
-          </div>
-          <div id='collapseGeneFold' className='collapse'>
-            <div className='card-body p-0'>
-              <table className='table table-striped table-rounded table-hover text-xs'>
-                <thead>
-                  <tr>
-                    <th>Gene</th>
-                    <th>Fold Enrichment</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.keys(geneExpressionFolds).length > 0 ? (
-                    geneExpressionFolds.map((item, index) => (
-                      <tr key={index} className='cursor-pointer' onClick={() => handleClickGeneRow(item.gene)}>
-                        <td>{item.gene}</td>
-                        <td>{item.foldEnrichment.toFixed(2)}x background</td>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className='fst-italic fw-medium'>Total</td>
+                        <td className='fst-italic fw-medium'>{selectedSampleCounts.filteredCells}</td>
                       </tr>
-                    ))
-                  ) : (
-                    <tr className='cursor-pointer'>
-                      <td className='fst-italic fw-medium'>None</td>
-                      <td className='fst-italic fw-medium'>No Cells Selected</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                      {Object.keys(selectedSampleCounts.cellCounts).map((cluster: string, index: number) => (
+                        <tr key={index}>
+                          <td>{cluster}</td>
+                          <td>{String(Object.values(selectedSampleCounts.cellCounts)[index])}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
-          </div>
+
+            <div className='card mb-3 shadow-sm'>
+              <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
+                <span className='fw-bold'>Most Expressed Genes</span>
+                <a 
+                  className='text-black fs-5 ms-auto cursor-pointer stretched-link'
+                  onClick={() => setShowGeneMean(!showGeneMean)}
+                  type='button'
+                  data-bs-toggle='collapse'
+                  data-bs-target='#collapseGeneMean'
+                  aria-expanded={showGeneMean}
+                  aria-controls='collapseGeneMean'
+                >
+                  {showGeneMean ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
+                </a>
+              </div>
+              <div id='collapseGeneMean' className='collapse'>
+                <div className='card-body p-0'>
+                  <table className='table table-striped table-rounded table-hover text-xs'>
+                    <thead>
+                      <tr>
+                        <th>Gene</th>
+                        <th>Mean Expression</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.keys(geneExpressionMeans).length > 0 ? (
+                        geneExpressionMeans.map((item, index) => (
+                          <tr key={index} className='cursor-pointer' onClick={() => handleClickGeneRow(item.gene)}>
+                            <td>{item.gene}</td>
+                            <td>{item.exprMean.toFixed(2)}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr className='cursor-pointer'>
+                          <td className='fst-italic fw-medium'>None</td>
+                          <td className='fst-italic fw-medium'>No Cells Selected</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className='card mb-3 shadow-sm'>
+              <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
+                <span className='fw-bold'>Most Frequent Genes</span>
+                <a 
+                  className='text-black fs-5 ms-auto cursor-pointer stretched-link'
+                  onClick={() => setShowGeneExpr(!showGeneExpr)}
+                  type='button'
+                  data-bs-toggle='collapse'
+                  data-bs-target='#collapseGeneExpr'
+                  aria-expanded={showGeneExpr}
+                  aria-controls='collapseGeneExpr'
+                >
+                  {showGeneExpr ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
+                </a>
+              </div>
+              <div id='collapseGeneExpr' className='collapse'>
+                <div className='card-body p-0'>
+                  <table className='table table-striped table-rounded table-hover text-xs'>
+                    <thead>
+                      <tr>
+                        <th>Gene</th>
+                        <th>Expression Rate</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.keys(geneExpressionRates).length > 0 ? (
+                        geneExpressionRates.map((item, index) => (
+                          <tr key={index} className='cursor-pointer' onClick={() => handleClickGeneRow(item.gene)}>
+                            <td>{item.gene}</td>
+                            <td>{item.exprRate.toFixed(2)}%</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr className='cursor-pointer'>
+                          <td className='fst-italic fw-medium'>None</td>
+                          <td className='fst-italic fw-medium'>No Cells Selected</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className='card mb-3 shadow-sm'>
+              <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
+                <span className='fw-bold'>Most Variable Genes</span>
+                <a 
+                  className='text-black fs-5 ms-auto cursor-pointer stretched-link'
+                  onClick={() => setShowGeneCV(!showGeneCV)}
+                  type='button'
+                  data-bs-toggle='collapse'
+                  data-bs-target='#collapseGeneCV'
+                  aria-expanded={showGeneCV}
+                  aria-controls='collapseGeneCV'
+                >
+                  {showGeneCV ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
+                </a>
+              </div>
+              <div id='collapseGeneCV' className='collapse'>
+                <div className='card-body p-0'>
+                  <table className='table table-striped table-rounded table-hover text-xs'>
+                    <thead>
+                      <tr>
+                        <th>Gene</th>
+                        <th>Coefficient of Variation</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.keys(geneExpressionCVs).length > 0 ? (
+                        geneExpressionCVs.map((item, index) => (
+                          <tr key={index} className='cursor-pointer' onClick={() => handleClickGeneRow(item.gene)}>
+                            <td>{item.gene}</td>
+                            <td>{item.cv.toFixed(2)}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr className='cursor-pointer'>
+                          <td className='fst-italic fw-medium'>None</td>
+                          <td className='fst-italic fw-medium'>No Cells Selected</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className='card mb-3 shadow-sm'>
+              <div className='card-header text-ss d-flex justify-content-between align-items-end position-relative'>
+                <span className='fw-bold'>Most Unique Genes</span>
+                <a 
+                  className='text-black fs-5 ms-auto cursor-pointer stretched-link'
+                  onClick={() => setShowGeneFold(!showGeneFold)}
+                  type='button'
+                  data-bs-toggle='collapse'
+                  data-bs-target='#collapseGeneFold'
+                  aria-expanded={showGeneFold}
+                  aria-controls='collapseGeneFold'
+                >
+                  {showGeneFold ? <i className='bi bi-chevron-compact-up' /> : <i className='bi bi-chevron-compact-down' />}
+                </a>
+              </div>
+              <div id='collapseGeneFold' className='collapse'>
+                <div className='card-body p-0'>
+                  <table className='table table-striped table-rounded table-hover text-xs'>
+                    <thead>
+                      <tr>
+                        <th>Gene</th>
+                        <th>Fold Enrichment</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.keys(geneExpressionFolds).length > 0 ? (
+                        geneExpressionFolds.map((item, index) => (
+                          <tr key={index} className='cursor-pointer' onClick={() => handleClickGeneRow(item.gene)}>
+                            <td>{item.gene}</td>
+                            <td>{item.foldEnrichment.toFixed(2)}x background</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr className='cursor-pointer'>
+                          <td className='fst-italic fw-medium'>None</td>
+                          <td className='fst-italic fw-medium'>No Cells Selected</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+          </div>    
+
         </div>
-
-      </div>    
-
-    </div>
+      )}
+    </>
+    
   );
 };
 

@@ -113,7 +113,11 @@ create_server <- function(con, cache) {
       }
     },
     staticPaths = list( # serve ui assets
-      '/assets' = file.path('..', 'ui', 'dist', 'assets')
+      '/assets' = file.path('..', 'ui', 'dist', 'assets'),
+      'sample.parquet' = file.path('..', 'ui', 'dist', 'sample.parquet'),
+      'sample_expr.parquet' = file.path('..', 'ui', 'dist', 'sample_expr.parquet'),
+      'sample_qc_subset.parquet' = file.path('..', 'ui', 'dist', 'sample_qc_subset.parquet'),
+      'sample_qc_subset_expr.parquet' = file.path('..', 'ui', 'dist', 'sample_qc_subset_expr.parquet')
     )
   )
   

@@ -43,7 +43,7 @@ function Main() {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <QueryClientProvider client={queryClient}>
-    <Toaster position='bottom-right' />
+    <Toaster position='top-right' />
     <Main />
   </QueryClientProvider>,
 );

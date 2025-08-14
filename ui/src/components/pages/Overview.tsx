@@ -37,7 +37,7 @@ function Overview() {
 
   return (
     <div className='row p-2 p-lg-4 mt-4 mt-lg-0'>
-      <div className='col-12 p-5'>
+      <div className='col-12 px-5 py-4'>
         {/* <div className='d-flex justify-content-end' ref={imgRef}></div> */}
         
         <h4 className='fw-lighter'>A functional, intuitive, and aesthetic interface for single-cell data</h4>
