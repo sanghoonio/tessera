@@ -16,3 +16,6 @@ dist-ssr
 
 db/*
 !db/sample/
+!db/generate_tutorial.R
+!db/generate_tutorial_qc_subset.R
+!db/load_duckdb.R

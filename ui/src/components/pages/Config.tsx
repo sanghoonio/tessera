@@ -25,7 +25,7 @@ function Config() {
 
   useEffect(() => {
     if (connectionTypeInput === 'websocket') {
-      console.log(connectionURLInput)
+      // console.log(connectionURLInput)
       const fetchTables = async () => {
         try {
           const api = vg.createAPIContext({
@@ -40,9 +40,10 @@ function Config() {
           `) as any;
 
           const formattedResult = result?.toArray()?.map((tableItem: {table_name: string}) => tableItem.table_name).filter((name: string) => (!name.includes('_expr')));
-          console.log(formattedResult)
+          // console.log(formattedResult)
           setServerTables(formattedResult)
           setConnectionError(false);
+          api.context.coordinator.clear({ clients: true, cache: true });
           if (formattedResult.length > 0) setTableInput(formattedResult[0]);
         } catch (error) {
           console.error(error)

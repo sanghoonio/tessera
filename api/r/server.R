@@ -98,7 +98,7 @@ create_server <- function(con, cache) {
           )
         }
       }
-      else { # serve ui index
+      else if (path == '/tessera/' || grepl('/tessera/', path)) { # serve ui index
         index_path <- file.path('..', 'ui', 'dist', 'index.html')
         if (file.exists(index_path)) {
           index_content <- readBin(index_path, 'raw', n = file.info(index_path)$size)
@@ -112,16 +112,16 @@ create_server <- function(con, cache) {
         }
       }
     },
-    staticPaths = list( # serve ui assets
-      '/assets' = file.path('..', 'ui', 'dist', 'assets'),
-      'sample.parquet' = file.path('..', 'ui', 'dist', 'sample.parquet'),
-      'sample_expr.parquet' = file.path('..', 'ui', 'dist', 'sample_expr.parquet'),
-      'sample_qc_subset.parquet' = file.path('..', 'ui', 'dist', 'sample_qc_subset.parquet'),
-      'sample_qc_subset_expr.parquet' = file.path('..', 'ui', 'dist', 'sample_qc_subset_expr.parquet')
+    staticPaths = list(
+      '/tessera/assets' = file.path('..', 'ui', 'dist', 'assets'),
+      '/tessera/sample_unfiltered.parquet' = file.path('..', 'ui', 'dist', 'sample_unfiltered.parquet'),
+      '/tessera/sample_unfiltered_expr.parquet' = file.path('..', 'ui', 'dist', 'sample_unfiltered_expr.parquet'),
+      '/tessera/sample_qc_filtered.parquet' = file.path('..', 'ui', 'dist', 'sample_qc_filtered.parquet'),
+      '/tessera/sample_qc_filtered_expr.parquet' = file.path('..', 'ui', 'dist', 'sample_qc_filtered_expr.parquet')
     )
   )
   
   cat('Server listening at ws://localhost:3000 and http://localhost:3000\n')
-  utils::browseURL('http://localhost:3000')
+  utils::browseURL('http://localhost:3000/tessera/')
   runServer('0.0.0.0', 3000, app)
 }

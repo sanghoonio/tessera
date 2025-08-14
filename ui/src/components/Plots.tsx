@@ -82,52 +82,34 @@ const Plots = () => {
     setGene(gene);
   }
 
-  const coordinators = useMemo(() => {
-    let baseConnector;
-    
-    if (connectionType === 'wasm') {
-      baseConnector = vg.wasmConnector();
-    } else {
-      baseConnector = vg.socketConnector(connectionURL as any);
-    }
-    
-    const coordinator = new vg.Coordinator(baseConnector);
-    coordinator.databaseConnector(baseConnector);
-    
-    if (connectionType === 'wasm') {
-      // const baseURL = 'https://cdn.jsdelivr.net/gh/sanghoonio/tessera@master/db/sample'
-      const baseURL = window.location.origin + location.pathname.split('/').slice(0, 2).join('/')
-      coordinator.exec(vg.loadParquet(table, `${baseURL}/${table}.parquet`))
-        .then(() => setMainIsLoading(false))
-        .catch(err => console.error('main table load error:', err));
-        
-      coordinator.exec(vg.loadParquet(`${table}_expr`, `${baseURL}/${table}_expr.parquet`))
-        .then(() => setExprIsLoading(false))
-        .catch(err => console.error('expression table load error:', err));
-      }
-    
-    return {
-      coordinator,
-      geneExprAPI: vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)}),
-      geneMeanAPI: vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)}),
-      geneCVAPI: vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)}),
-      geneFoldAPI: vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)}),
-      umapAPI: vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)}),
-      qcAPI: vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)}),
-      saturationAPI: vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)})
-    };
-  }, [connectionType, connectionURL, table]);
-  
-  const { 
-    coordinator, 
-    geneExprAPI, 
-    geneMeanAPI, 
-    geneCVAPI, 
-    geneFoldAPI, 
-    umapAPI, 
-    qcAPI, 
-    saturationAPI 
-  } = coordinators;
+  let baseConnector;
+  if (connectionType === 'wasm') {
+    baseConnector = vg.wasmConnector();
+  } else {
+    baseConnector = vg.socketConnector(connectionURL as any);
+  }
+
+  const coordinator = new vg.Coordinator(baseConnector);
+  coordinator.databaseConnector(baseConnector);
+
+  if (connectionType === 'wasm') {
+    const baseURL = window.location.origin + location.pathname.split('/').slice(0, 2).join('/')
+    coordinator.exec(vg.loadParquet(table, `${baseURL}/${table}.parquet`))
+      .then(() => setMainIsLoading(false))
+      .catch(err => console.error('main table load error:', err));
+      
+    coordinator.exec(vg.loadParquet(`${table}_expr`, `${baseURL}/${table}_expr.parquet`))
+      .then(() => setExprIsLoading(false))
+      .catch(err => console.error('expression table load error:', err));
+  }
+
+  const geneExprAPI = vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)});
+  const geneMeanAPI = vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)});
+  const geneCVAPI = vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)});
+  const geneFoldAPI = vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)});
+  const umapAPI = vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)});
+  const qcAPI = vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)});
+  const saturationAPI = vg.createAPIContext({coordinator: new vg.Coordinator(baseConnector)});
 
   const $legendBrush = useRef(vg.Selection.crossfilter()).current;
   const $umapBrush = useRef(vg.Selection.intersect()).current;
