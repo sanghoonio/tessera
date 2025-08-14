@@ -96,7 +96,7 @@ const Plots = () => {
     
     if (connectionType === 'wasm') {
       // const baseURL = 'https://cdn.jsdelivr.net/gh/sanghoonio/tessera@master/db/sample'
-      const baseURL = window.location.origin + window.location.pathname.replace(/\/$/, '').replace(location.pathname, '')
+      const baseURL = window.location.origin + location.pathname.split('/').slice(0, 2).join('/')
       coordinator.exec(vg.loadParquet(table, `${baseURL}/${table}.parquet`))
         .then(() => setMainIsLoading(false))
         .catch(err => console.error('main table load error:', err));

@@ -18,7 +18,7 @@ const queryClient = new QueryClient();
 
 function Main() {
   return (
-    <BrowserRouter basename=''>
+    <BrowserRouter basename='/tessera'>
       <div className='d-flex flex-column flex-lg-row min-vh-100'>
         <Navbar />
         <div className='flex-1 content px-2 px-lg-0'>

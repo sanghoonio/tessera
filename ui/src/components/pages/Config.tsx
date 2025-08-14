@@ -21,7 +21,7 @@ function Config() {
   const [serverTables, setServerTables] = useState<string[]>([]);
   const [connectionError, setConnectionError] = useState(false);
 
-  const wasmTables = ['sample', 'sample_qc_subset'];
+  const wasmTables = ['sample_qc_filtered', 'sample_unfiltered'];
 
   useEffect(() => {
     if (connectionTypeInput === 'websocket') {
