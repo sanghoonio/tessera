@@ -223,7 +223,7 @@ export const fetchExpressionFolds = (
   coordinator: any,
   table: string,
   selection: any,
-  setGeneExpressionRates: (geneExpressionRates: any) => void
+  setGeneExpressionFolds: (geneExpressionFolds: any) => void
 ) => makeClient({
   coordinator: coordinator,
   selection: selection,
@@ -261,7 +261,7 @@ export const fetchExpressionFolds = (
       });
       }
     }
-    setGeneExpressionRates(results);
+    setGeneExpressionFolds(results);
   },
   queryError: (error) => {
     console.error('Long format query error:', error);

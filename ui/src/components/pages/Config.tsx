@@ -21,7 +21,7 @@ function Config() {
   const [serverTables, setServerTables] = useState<string[]>([]);
   const [connectionError, setConnectionError] = useState(false);
 
-  const wasmTables = ['sample_qc_filtered', 'sample_unfiltered'];
+  const wasmTables = ['sample_unfiltered'];
 
   useEffect(() => {
     if (connectionTypeInput === 'websocket') {
@@ -44,7 +44,12 @@ function Config() {
           setServerTables(formattedResult)
           setConnectionError(false);
           api.context.coordinator.clear({ clients: true, cache: true });
-          if (formattedResult.length > 0) setTableInput(formattedResult[0]);
+          if (formattedResult.length > 0) {
+            // Only change if current selection is not in the server tables
+            if (!formattedResult.includes(tableInput)) {
+              setTableInput(formattedResult[0]);
+            }
+          }
         } catch (error) {
           console.error(error)
           setConnectionError(true);

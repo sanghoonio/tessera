@@ -26,7 +26,7 @@ handle_query <- function(con, cache, query) {
   result
 }
 
-create_server <- function(con, cache) {
+create_server <- function(con, cache, run_ui) {
   app <- list(
     onWSOpen = function(ws) { # websocket server
       ws$onMessage(function(binary, message) {
@@ -115,13 +115,13 @@ create_server <- function(con, cache) {
     staticPaths = list(
       '/tessera/assets' = file.path('..', 'ui', 'dist', 'assets'),
       '/tessera/sample_unfiltered.parquet' = file.path('..', 'ui', 'dist', 'sample_unfiltered.parquet'),
-      '/tessera/sample_unfiltered_expr.parquet' = file.path('..', 'ui', 'dist', 'sample_unfiltered_expr.parquet'),
-      '/tessera/sample_qc_filtered.parquet' = file.path('..', 'ui', 'dist', 'sample_qc_filtered.parquet'),
-      '/tessera/sample_qc_filtered_expr.parquet' = file.path('..', 'ui', 'dist', 'sample_qc_filtered_expr.parquet')
+      '/tessera/sample_unfiltered_expr.parquet' = file.path('..', 'ui', 'dist', 'sample_unfiltered_expr.parquet')
+      # '/tessera/sample_qc_filtered.parquet' = file.path('..', 'ui', 'dist', 'sample_qc_filtered.parquet'),
+      # '/tessera/sample_qc_filtered_expr.parquet' = file.path('..', 'ui', 'dist', 'sample_qc_filtered_expr.parquet')
     )
   )
   
   cat('Server listening at ws://localhost:3000 and http://localhost:3000\n')
-  utils::browseURL('http://localhost:3000/tessera/')
+  if (isTRUE(run_ui)) utils::browseURL('http://localhost:3000/tessera/')
   runServer('0.0.0.0', 3000, app)
 }

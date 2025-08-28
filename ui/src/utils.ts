@@ -15,9 +15,9 @@ export const createUmapCategories = (
   gene: string, 
   gene2: string, 
   geneComparisonMode: string, 
-  // clusterCount: number, 
   cellTypes: string[], 
-  samples: string[]
+  samples: string[],
+  clusterCount: number
 ) => {
   const geneCol = 'gene_' + gene;
   const gene2Col = 'gene_' + gene2;
@@ -32,16 +32,36 @@ export const createUmapCategories = (
       colorScheme: null,
       colorReverse: null
     },
+    'cluster_silhouette': {
+      title: 'Cell Type Silhouette', 
+      legendTitle: 'Cell Type Silhouette', 
+      fillValue: 'cluster_silhouette', 
+      colorScale: 'linear', 
+      colorRange: null,
+      colorDomain: null,
+      colorScheme: 'spectral',
+      colorReverse: true
+    },
     'pca_cluster': {
       title: 'Seurat Cluster', 
       legendTitle: 'Seurat Cluster', 
       fillValue: 'pca_cluster', 
       colorScale: 'ordinal', 
       colorRange: tableau20,
-      // colorDomain: Array.from({length: clusterCount}, (_, i) => i.toString()),
-      colorDomain: null,
+      colorDomain: Array.from({length: clusterCount}, (_, i) => i.toString()),
+      // colorDomain: null,
       colorScheme: null,
       colorReverse: null
+    },
+    'pca_silhouette': {
+      title: 'Seurat Cluster Silhouette', 
+      legendTitle: 'Seurat Cluster Silhouette', 
+      fillValue: 'pca_silhouette', 
+      colorScale: 'linear', 
+      colorRange: null,
+      colorDomain: null,
+      colorScheme: 'spectral',
+      colorReverse: true
     },
     'sample': {
       title: 'Sample', 
@@ -83,6 +103,16 @@ export const createUmapCategories = (
       colorScheme: 'spectral',
       colorReverse: true
     }, 
+    'nFeature_nCount_RNA': {
+      title: 'nFeature / nUMI',
+      legendTitle: 'nFeature / nUMI', 
+      fillValue: 'nFeature_nCount_RNA', 
+      colorScale: 'linear', 
+      colorRange: null,
+      colorDomain: null,
+      colorScheme: 'spectral',
+      colorReverse: true
+    }, 
     'percent_mt': {
       title: 'Percent MT', 
       legendTitle: 'Percent MT', 
@@ -92,6 +122,16 @@ export const createUmapCategories = (
       colorDomain: null,
       colorScheme: 'spectral',
       colorReverse: true
+    },
+    'phase': {
+      title: 'Cell Cycle Phase', 
+      legendTitle: 'Cell Cycle Phase', 
+      fillValue: 'phase', 
+      colorScale: 'ordinal', 
+      colorRange: tableau20,
+      colorDomain: null,
+      colorScheme: null,
+      colorReverse: null
     },
     'gene': {
       title: 'Gene Expression', 

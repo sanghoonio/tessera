@@ -4,7 +4,7 @@ import * as vg from '@uwdata/vgplot';
 // import { useLocation } from 'react-router-dom';
 
 import { createUmapCategories, bootstrapSelectStyles, tableau20 } from '../utils';
-import { fetchGeneCols, fetchColumnValues, fetchColumnCountsFilter, fetchExpressionRates, fetchExpressionMeans, fetchExpressionCVs, fetchExpressionFolds } from '../clients';
+import { fetchGeneCols, fetchColumnValues, fetchColumnCounts, fetchColumnCountsFilter, fetchExpressionRates, fetchExpressionMeans, fetchExpressionCVs, fetchExpressionFolds } from '../clients';
 import { useConfigStore } from '../stores/config';
 
 const Plots = () => {
@@ -36,7 +36,7 @@ const Plots = () => {
   const [umapFill, setUmapFill] = useState('cluster');
   const [containerWidth, setContainerWidth] = useState(800);
   const [legendPosition, setLegendPosition] = useState('topright');
-  // const [clusterCount, setClusterCount] = useState(0);
+  const [clusterCount, setClusterCount] = useState(0);
   const [cellTypes, setCellTypes] = useState<string[]>([]);
   const [samples, setSamples] = useState<string[]>([]);
 
@@ -72,7 +72,7 @@ const Plots = () => {
   );
 
   const umapCategories = useMemo(() => 
-    createUmapCategories(gene, gene2, geneComparisonMode, cellTypes, samples),
+    createUmapCategories(gene, gene2, geneComparisonMode, cellTypes, samples, clusterCount),
     [gene, gene2, geneComparisonMode, cellTypes, samples]
   );
   const umapCategory = umapCategories[umapFill as keyof typeof umapCategories];
@@ -315,7 +315,7 @@ const Plots = () => {
 
   useEffect(() => { // get number of pca clusters and arrays of unique cell types, samples, gene columns
     if (!coordinator) return;
-    // fetchColumnCounts(coordinator, table, 'pca_cluster').then(result => setClusterCount(result));
+    fetchColumnCounts(coordinator, table, 'pca_cluster').then(result => setClusterCount(result));
     fetchColumnValues(coordinator, table, 'cluster').then(result => setCellTypes(result));
     fetchColumnValues(coordinator, table, 'sample').then(result => setSamples(result));
     fetchGeneCols(coordinator, table).then(result => {

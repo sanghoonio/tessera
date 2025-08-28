@@ -12,7 +12,7 @@ type ConfigStore = {
 }
 
 export const useConfigStore = create<ConfigStore>((set) => ({
-  table: 'sample_qc_filtered',
+  table: 'sample_unfiltered',
   connectionType: 'wasm',
   connectionURL: 'ws://localhost:3000/',
   

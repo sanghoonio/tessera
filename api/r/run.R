@@ -8,6 +8,7 @@ source(file.path('R', 'utils.R'))
 run <- function() {
   args <- commandArgs(trailingOnly = TRUE)
   db_path <- if (length(args) >= 1) args[1] else ':memory:'
+  run_ui <- if (length(args) >= 2) (tolower(args[2]) != 'false') else TRUE
   
   con <- dbConnect(duckdb(), dbdir = db_path)
   on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
@@ -17,7 +18,7 @@ run <- function() {
   }
   
   cache <- cache_mem()
-  create_server(con, cache)
+  create_server(con, cache, run_ui)
 }
 
 run()
