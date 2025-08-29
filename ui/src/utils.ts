@@ -13,14 +13,15 @@ const grayBlue = ['#f0f0f0', '#deebf7', '#9ecae1', '#3182bd', '#08519c']
 
 export const createUmapCategories = (
   gene: string, 
-  gene2: string, 
+  gene2: string[], 
   geneComparisonMode: string, 
   cellTypes: string[], 
   samples: string[],
   clusterCount: number
 ) => {
   const geneCol = 'gene_' + gene;
-  const gene2Col = 'gene_' + gene2;
+  const isGene2Array = Array.isArray(gene2);
+  const gene2Cols = isGene2Array ? gene2.map(g => `gene_${g}`) : [`gene_${gene2}`];
   const umapCategories = {
     'cluster': {
       title: 'Cell Type', 
@@ -146,40 +147,55 @@ export const createUmapCategories = (
     'genes': {
       title: 'Gene Coexpression', 
       legendTitle: geneComparisonMode === 'addition' 
-        ? `${gene} or ${gene2}`
-        : geneComparisonMode === 'geometric' 
-          ? `${gene} and ${gene2}`
-          : `${gene} vs. ${gene2}`, 
+      ? `${gene} or ${isGene2Array ? `${gene2.slice(0, 2).join(' or ')}${gene2.length > 2 ? ' or ...' : ''}` : gene2}`
+      : geneComparisonMode === 'geometric' 
+        ? `${gene} and ${isGene2Array ? `${gene2.slice(0, 2).join(' and ')}${gene2.length > 2 ? ' and ...' : ''}` : gene2}`
+        : `${gene} vs. ${isGene2Array ? `[${gene2.slice(0, 2).join(', ')}${gene2.length > 2 ? ', ...' : ''}]` : gene2}`, 
       fillValue: (() => {
-        switch(geneComparisonMode) {
-          case 'addition':
-            return vg.sql`${geneCol} + ${gene2Col}`;
-          case 'geometric':
-            return vg.sql`SQRT(${geneCol} * ${gene2Col})`;
-          case 'logfold':
-            return vg.sql`LOG(${gene2Col} + 1) - LOG(${geneCol} + 1)`;
-          case 'categorical':
-            return gene === gene2
-              ? vg.sql`CASE WHEN ${geneCol} > 0 THEN '${geneCol} Expressed' ELSE 'Not Expressed' END`
-              : vg.sql`CASE 
-                  WHEN ${geneCol} > 0 AND ${gene2Col} > 0 THEN 'Both Expressed'
-                  WHEN ${geneCol} > 0 AND ${gene2Col} = 0 THEN '${gene} Expressed' 
-                  WHEN ${geneCol} = 0 AND ${gene2Col} > 0 THEN '${gene2} Expressed'
-                  ELSE 'Neither Expressed' END`
-          default:
-            return geneCol;
+        if (isGene2Array) {
+          switch(geneComparisonMode) {
+            case 'addition':
+              const sumExpression = gene2Cols.join(' + ');
+              return vg.sql`(${geneCol} + ${sumExpression}) / ${gene2Cols.length}`;
+            case 'geometric':
+              return vg.sql`POWER((${geneCol} + 1) * ${gene2Cols.map(col => `(${col} + 1)`).join(' * ')}, 1.0/${1 + gene2Cols.length}) - 1`;
+            case 'logfold':
+              const avgLog = `(${gene2Cols.map(col => `LOG(${col} + 1)`).join(' + ')}) / ${gene2Cols.length}`;
+              return vg.sql`(${avgLog}) - LOG(${geneCol} + 1)`;
+            default:
+              return geneCol;
+          }
+        } else {
+          switch(geneComparisonMode) {
+            case 'addition':
+              return vg.sql`${geneCol} + ${gene2Cols[0]}`;
+            case 'geometric':
+              return vg.sql`SQRT(${geneCol} * ${gene2Cols[0]})`;
+            case 'logfold':
+              return vg.sql`LOG(${gene2Cols[0]} + 1) - LOG(${geneCol} + 1)`;
+            case 'categorical':
+              return gene === gene2
+                ? vg.sql`CASE WHEN ${geneCol} > 0 THEN '${geneCol} Expressed' ELSE 'Not Expressed' END`
+                : vg.sql`CASE 
+                    WHEN ${geneCol} > 0 AND ${gene2Cols[0]} > 0 THEN 'Both Expressed'
+                    WHEN ${geneCol} > 0 AND ${gene2Cols[0]} = 0 THEN '${gene} Expressed' 
+                    WHEN ${geneCol} = 0 AND ${gene2Cols[0]} > 0 THEN '${gene2} Expressed'
+                    ELSE 'Neither Expressed' END`
+            default:
+              return geneCol;
+          }
         }
       })(), 
       colorScale: geneComparisonMode === 'categorical' ? 'ordinal' : 'linear', 
       colorRange: geneComparisonMode === 'categorical' 
-        ? gene === gene2 
+        ? gene === gene2[0] 
           ? ['#1f77b4', transparentGray] 
           : ['#333333', '#1f77b4', '#ff7f0e', transparentGray] 
         : geneComparisonMode === 'logfold'
           ? ['#313695', '#abd9e9', transparentGray, '#fee08b', '#d73027']
           : grayBlue,
       colorDomain: geneComparisonMode === 'categorical' 
-        ? gene === gene2 
+        ? gene === gene2[0]
           ? [`${gene} Expressed`, 'Not Expressed']
           : ['Both Expressed', `${gene} Expressed`, `${gene2} Expressed`, 'Neither Expressed']
         : null,
@@ -204,10 +220,11 @@ export const createUmapCategories = (
 export const bootstrapSelectStyles = {
   control: (provided: any, state: any) => ({
     ...provided,
-    minHeight: '31px',
-    height: '31px',
+    minHeight: '29px', // Change from '31px' to 'auto'
+    height: 'auto', // Change from '31px' to 'auto'
+    // lineHeight: '27px',
     fontFamily: 'Nunito',
-    fontWeight: 400 ,
+    fontWeight: 400,
     fontStyle: 'normal',
     fontSize: '0.875rem',
     borderColor: state.isFocused ? '#86b7fe' : '#dee2e6',
@@ -219,8 +236,27 @@ export const bootstrapSelectStyles = {
   }),
   valueContainer: (provided: any) => ({
     ...provided,
-    height: '31px',
-    padding: '0 6px'
+    minHeight: '29px', // Keep minimum height
+    padding: '2px 6px', // Reduce padding
+    flexWrap: 'wrap' // Ensure proper wrapping
+  }),
+  multiValue: (provided: any) => ({
+    ...provided,
+    fontSize: '0.75rem', // Smaller text for tags
+    margin: '1px', // Reduce margin between tags
+  }),
+  multiValueLabel: (provided: any) => ({
+    ...provided,
+    padding: '2px 6px', // Smaller padding inside tags
+    fontSize: '0.75rem'
+  }),
+  multiValueRemove: (provided: any) => ({
+    ...provided,
+    padding: '2px',
+    ':hover': {
+      backgroundColor: '#dc3545',
+      color: 'white'
+    }
   }),
   input: (provided: any) => ({
     ...provided,
@@ -231,7 +267,7 @@ export const bootstrapSelectStyles = {
   }),
   indicatorsContainer: (provided: any) => ({
     ...provided,
-    height: '31px',
+    height: '29px',
   }),
   clearIndicator: (provided: any) => ({
     ...provided,

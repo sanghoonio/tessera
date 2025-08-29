@@ -47,7 +47,7 @@ const Plots = () => {
   const [geneExpressionFolds, setGeneExpressionFolds] = useState<{gene: string, foldEnrichment: number}[]>([]);
   const [genes, setGenes] = useState<string[]>([])
   const [gene, setGene] = useState('');
-  const [gene2, setGene2] = useState('');
+  const [gene2, setGene2] = useState<string[]>([]);
 
   const [selectedCellTypeCounts, setSelectedCellTypeCounts] = useState({
     totalCells: 0,
@@ -321,7 +321,7 @@ const Plots = () => {
     fetchGeneCols(coordinator, table).then(result => {
       if (result && result.length > 0) {
         setGene(result[0]);
-        setGene2(result[1]);
+        setGene2([result[1]]);
         setGenes(result);
       }
     })
@@ -633,13 +633,14 @@ const Plots = () => {
                     <p className='text-ss mt-3 mb-0 fw-bold'>Gene 2</p>
                       <Select 
                         options={geneOptions} 
-                        value={{value: gene2, label: gene2.replace('gene_', '')}} 
-                        onChange={(selectedOption) => setGene2(selectedOption?.value || '')}
+                        isMulti
+                        value={gene2.map(g => ({value: g, label: g.replace('gene_', '')}))} 
+                        onChange={(selectedOptions) => setGene2(selectedOptions.map(option => option.value))}
                         isSearchable
                         styles={bootstrapSelectStyles}
                       />
 
-                      <p className='text-ss mt-3 mb-0 fw-bold'>Gene Comparison</p>
+                      <p className='text-ss mt-3 mb-0 fw-bold'>Comparison Method</p>
                       <select 
                         className='form-select form-select-sm'
                         value={geneComparisonMode}
