@@ -51,8 +51,8 @@ function Navbar() {
           <div className='col-12 p-4'>
             <div className='d-flex'>
               <Link to='' className='text-decoration-none text-dark mx-auto'>
-                <h5 
-                  className='fst-condensed mt-2 fw-light m-0' 
+                <h5
+                  className='fst-condensed mt-2 fw-light m-0'
                   // onMouseEnter={() => setTitleText('Tes[seurat]')}
                   // onMouseLeave={() => setTitleText('Tessera')}
                 >
@@ -130,8 +130,8 @@ function Navbar() {
         <div className='row page-width'>
           <div className='col-12 pt-4 px-4 pb-3'>
             <Link to='' className='text-decoration-none text-dark'>
-              <h5 
-                className='fst-condensed mt-2 fw-light text-center' 
+              <h5
+                className='fst-condensed mt-2 fw-light text-center'
                 onMouseEnter={() => setTitleText('Tes[seurat]')}
                 onMouseLeave={() => setTitleText('Tessera')}
               >

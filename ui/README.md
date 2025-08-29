@@ -1,23 +1,25 @@
 # Tessera UI
 
-
 This directory contains a React UI that works with the backend server.
 
 ### Dependencies
 
 Install required dependences:
-``` sh
+
+```sh
 npm install
 ```
 
 ### Running the server
 
 Run the dev server:
-``` sh
+
+```sh
 npm run dev
 ```
 
 Build the UI to allow the server to host it:
-``` sh
+
+```sh
 npm run build
 ```

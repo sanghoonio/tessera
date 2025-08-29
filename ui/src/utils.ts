@@ -1,172 +1,189 @@
 import * as vg from '@uwdata/vgplot';
 
-
 export const tableau20 = [
-  '#1f77b4', '#aec7e8', '#ff7f0e', '#ffbb78', '#2ca02c', 
-  '#98df8a', '#d62728', '#ff9896', '#9467bd', '#c5b0d5', 
-  '#8c564b', '#c49c94', '#e377c2', '#f7b6d3', '#7f7f7f', 
-  '#c7c7c7', '#bcbd22', '#dbdb8d', '#17becf', '#9edae5'
-]
-const transparentGray = 'rgba(204, 204, 204, 0.2)'
-const transparentRed = 'rgba(255, 0, 0, 0.3)'
-const grayBlue = ['#f0f0f0', '#deebf7', '#9ecae1', '#3182bd', '#08519c']
+  '#1f77b4',
+  '#aec7e8',
+  '#ff7f0e',
+  '#ffbb78',
+  '#2ca02c',
+  '#98df8a',
+  '#d62728',
+  '#ff9896',
+  '#9467bd',
+  '#c5b0d5',
+  '#8c564b',
+  '#c49c94',
+  '#e377c2',
+  '#f7b6d3',
+  '#7f7f7f',
+  '#c7c7c7',
+  '#bcbd22',
+  '#dbdb8d',
+  '#17becf',
+  '#9edae5',
+];
+const transparentGray = 'rgba(204, 204, 204, 0.2)';
+const transparentRed = 'rgba(255, 0, 0, 0.3)';
+const grayBlue = ['#f0f0f0', '#deebf7', '#9ecae1', '#3182bd', '#08519c'];
 
 export const createUmapCategories = (
-  gene: string, 
-  gene2: string[], 
-  geneComparisonMode: string, 
-  cellTypes: string[], 
+  gene: string,
+  gene2: string[],
+  geneComparisonMode: string,
+  cellTypes: string[],
   samples: string[],
-  clusterCount: number
+  clusterCount: number,
 ) => {
   const geneCol = 'gene_' + gene;
   const isGene2Array = Array.isArray(gene2);
-  const gene2Cols = isGene2Array ? gene2.map(g => `gene_${g}`) : [`gene_${gene2}`];
+  const gene2Cols = isGene2Array
+    ? gene2.map((g) => `gene_${g}`)
+    : [`gene_${gene2}`];
   const umapCategories = {
-    'cluster': {
-      title: 'Cell Type', 
-      legendTitle: 'Cell Type', 
-      fillValue: 'cluster', 
-      colorScale: 'ordinal', 
+    cluster: {
+      title: 'Cell Type',
+      legendTitle: 'Cell Type',
+      fillValue: 'cluster',
+      colorScale: 'ordinal',
       colorRange: tableau20,
       colorDomain: cellTypes,
       colorScheme: null,
-      colorReverse: null
+      colorReverse: null,
     },
-    'cluster_silhouette': {
-      title: 'Cell Type Silhouette', 
-      legendTitle: 'Cell Type Silhouette', 
-      fillValue: 'cluster_silhouette', 
-      colorScale: 'linear', 
+    cluster_silhouette: {
+      title: 'Cell Type Silhouette',
+      legendTitle: 'Cell Type Silhouette',
+      fillValue: 'cluster_silhouette',
+      colorScale: 'linear',
       colorRange: null,
       colorDomain: null,
       colorScheme: 'spectral',
-      colorReverse: true
+      colorReverse: true,
     },
-    'pca_cluster': {
-      title: 'Seurat Cluster', 
-      legendTitle: 'Seurat Cluster', 
-      fillValue: 'pca_cluster', 
-      colorScale: 'ordinal', 
+    pca_cluster: {
+      title: 'Seurat Cluster',
+      legendTitle: 'Seurat Cluster',
+      fillValue: 'pca_cluster',
+      colorScale: 'ordinal',
       colorRange: tableau20,
-      colorDomain: Array.from({length: clusterCount}, (_, i) => i.toString()),
+      colorDomain: Array.from({ length: clusterCount }, (_, i) => i.toString()),
       // colorDomain: null,
       colorScheme: null,
-      colorReverse: null
+      colorReverse: null,
     },
-    'pca_silhouette': {
-      title: 'Seurat Cluster Silhouette', 
-      legendTitle: 'Seurat Cluster Silhouette', 
-      fillValue: 'pca_silhouette', 
-      colorScale: 'linear', 
+    pca_silhouette: {
+      title: 'Seurat Cluster Silhouette',
+      legendTitle: 'Seurat Cluster Silhouette',
+      fillValue: 'pca_silhouette',
+      colorScale: 'linear',
       colorRange: null,
       colorDomain: null,
       colorScheme: 'spectral',
-      colorReverse: true
+      colorReverse: true,
     },
-    'sample': {
-      title: 'Sample', 
-      legendTitle: 'Sample', 
-      fillValue: 'sample', 
-      colorScale: 'ordinal', 
+    sample: {
+      title: 'Sample',
+      legendTitle: 'Sample',
+      fillValue: 'sample',
+      colorScale: 'ordinal',
       colorRange: tableau20,
       colorDomain: samples,
       colorScheme: null,
-      colorReverse: null
+      colorReverse: null,
     },
-    'orig_ident': {
-      title: 'Source', 
-      legendTitle: 'Source', 
-      fillValue: 'orig_ident', 
-      colorScale: 'ordinal', 
+    orig_ident: {
+      title: 'Source',
+      legendTitle: 'Source',
+      fillValue: 'orig_ident',
+      colorScale: 'ordinal',
       colorRange: tableau20,
       colorDomain: null,
       colorScheme: null,
-      colorReverse: null
+      colorReverse: null,
     },
-    'nFeature_RNA': {
-      title: 'nFeature', 
-      legendTitle: 'nFeature', 
-      fillValue: 'nFeature_RNA', 
-      colorScale: 'linear', 
+    nFeature_RNA: {
+      title: 'nFeature',
+      legendTitle: 'nFeature',
+      fillValue: 'nFeature_RNA',
+      colorScale: 'linear',
       colorRange: null,
       colorDomain: null,
       colorScheme: 'spectral',
-      colorReverse: true
+      colorReverse: true,
     },
-    'nCount_RNA': {
+    nCount_RNA: {
       title: 'nUMI',
-      legendTitle: 'nUMI', 
-      fillValue: 'nCount_RNA', 
-      colorScale: 'linear', 
+      legendTitle: 'nUMI',
+      fillValue: 'nCount_RNA',
+      colorScale: 'linear',
       colorRange: null,
       colorDomain: null,
       colorScheme: 'spectral',
-      colorReverse: true
-    }, 
-    'nFeature_nCount_RNA': {
-      title: 'nFeature / nUMI',
-      legendTitle: 'nFeature / nUMI', 
-      fillValue: 'nFeature_nCount_RNA', 
-      colorScale: 'linear', 
-      colorRange: null,
-      colorDomain: null,
-      colorScheme: 'spectral',
-      colorReverse: true
-    }, 
-    'percent_mt': {
-      title: 'Percent MT', 
-      legendTitle: 'Percent MT', 
-      fillValue: 'percent_mt', 
-      colorScale: 'linear', 
-      colorRange: null,
-      colorDomain: null,
-      colorScheme: 'spectral',
-      colorReverse: true
+      colorReverse: true,
     },
-    'phase': {
-      title: 'Cell Cycle Phase', 
-      legendTitle: 'Cell Cycle Phase', 
-      fillValue: 'phase', 
-      colorScale: 'ordinal', 
+    nFeature_nCount_RNA: {
+      title: 'nFeature / nUMI',
+      legendTitle: 'nFeature / nUMI',
+      fillValue: 'nFeature_nCount_RNA',
+      colorScale: 'linear',
+      colorRange: null,
+      colorDomain: null,
+      colorScheme: 'spectral',
+      colorReverse: true,
+    },
+    percent_mt: {
+      title: 'Percent MT',
+      legendTitle: 'Percent MT',
+      fillValue: 'percent_mt',
+      colorScale: 'linear',
+      colorRange: null,
+      colorDomain: null,
+      colorScheme: 'spectral',
+      colorReverse: true,
+    },
+    phase: {
+      title: 'Cell Cycle Phase',
+      legendTitle: 'Cell Cycle Phase',
+      fillValue: 'phase',
+      colorScale: 'ordinal',
       colorRange: tableau20,
       colorDomain: null,
       colorScheme: null,
-      colorReverse: null
+      colorReverse: null,
     },
-    'gene': {
-      title: 'Gene Expression', 
-      legendTitle: `${gene} Expression`, 
-      fillValue: geneCol, 
-      colorScale: 'linear', 
+    gene: {
+      title: 'Gene Expression',
+      legendTitle: `${gene} Expression`,
+      fillValue: geneCol,
+      colorScale: 'linear',
       colorRange: grayBlue,
       colorDomain: null,
       colorScheme: null,
-      colorReverse: null
+      colorReverse: null,
     },
-    'genes': {
-      title: 'Gene Coexpression', 
-      legendTitle: geneComparisonMode === 'addition' 
-      ? `Total Expression`
-      : geneComparisonMode === 'geometric' 
-        ? `Mean Expression`
-        : `Log Fold Change`, 
+    genes: {
+      title: 'Gene Coexpression',
+      legendTitle:
+        geneComparisonMode === 'addition'
+          ? `Total Expression`
+          : geneComparisonMode === 'geometric'
+            ? `Mean Expression`
+            : `Log Fold Change`,
       fillValue: (() => {
         if (isGene2Array) {
-          switch(geneComparisonMode) {
+          switch (geneComparisonMode) {
             case 'addition':
-              const sumExpression = gene2Cols.join(' + ');
-              return vg.sql`(${geneCol} + ${sumExpression}) / ${gene2Cols.length}`;
+              return vg.sql`(${gene2Cols.join(' + ')}) / ${gene2Cols.length}`;
             case 'geometric':
-              return vg.sql`POWER((${geneCol} + 1) * ${gene2Cols.map(col => `(${col} + 1)`).join(' * ')}, 1.0/${1 + gene2Cols.length}) - 1`;
-            case 'logfold':
-              const avgLog = `(${gene2Cols.map(col => `LOG(${col} + 1)`).join(' + ')}) / ${gene2Cols.length}`;
-              return vg.sql`(${avgLog}) - LOG(${geneCol} + 1)`;
+              return vg.sql`POWER(${gene2Cols.map((col) => `(${col} + 1)`).join(' * ')}, 1.0/${gene2Cols.length}) - 1`;
+            // case 'logfold':
+            //   const avgLog = `(${gene2Cols.map(col => `LOG(${col} + 1)`).join(' + ')}) / ${gene2Cols.length}`;
+            //   return vg.sql`(${avgLog}) - LOG(${geneCol} + 1)`;
             default:
               return geneCol;
           }
         } else {
-          switch(geneComparisonMode) {
+          switch (geneComparisonMode) {
             case 'addition':
               return vg.sql`${geneCol} + ${gene2Cols[0]}`;
             case 'geometric':
@@ -180,42 +197,49 @@ export const createUmapCategories = (
                     WHEN ${geneCol} > 0 AND ${gene2Cols[0]} > 0 THEN 'Both Expressed'
                     WHEN ${geneCol} > 0 AND ${gene2Cols[0]} = 0 THEN '${gene} Expressed' 
                     WHEN ${geneCol} = 0 AND ${gene2Cols[0]} > 0 THEN '${gene2} Expressed'
-                    ELSE 'Neither Expressed' END`
+                    ELSE 'Neither Expressed' END`;
             default:
               return geneCol;
           }
         }
-      })(), 
-      colorScale: geneComparisonMode === 'categorical' ? 'ordinal' : 'linear', 
-      colorRange: geneComparisonMode === 'categorical' 
-        ? gene === gene2[0] 
-          ? ['#1f77b4', transparentGray] 
-          : ['#333333', '#1f77b4', '#ff7f0e', transparentGray] 
-        : geneComparisonMode === 'logfold'
-          ? ['#313695', '#abd9e9', transparentGray, '#fee08b', '#d73027']
-          : grayBlue,
-      colorDomain: geneComparisonMode === 'categorical' 
-        ? gene === gene2[0]
-          ? [`${gene} Expressed`, 'Not Expressed']
-          : ['Both Expressed', `${gene} Expressed`, `${gene2} Expressed`, 'Neither Expressed']
-        : null,
+      })(),
+      colorScale: geneComparisonMode === 'categorical' ? 'ordinal' : 'linear',
+      colorRange:
+        geneComparisonMode === 'categorical'
+          ? gene === gene2[0]
+            ? ['#1f77b4', transparentGray]
+            : ['#333333', '#1f77b4', '#ff7f0e', transparentGray]
+          : geneComparisonMode === 'logfold'
+            ? ['#313695', '#abd9e9', transparentGray, '#fee08b', '#d73027']
+            : grayBlue,
+      colorDomain:
+        geneComparisonMode === 'categorical'
+          ? gene === gene2[0]
+            ? [`${gene} Expressed`, 'Not Expressed']
+            : [
+                'Both Expressed',
+                `${gene} Expressed`,
+                `${gene2} Expressed`,
+                'Neither Expressed',
+              ]
+          : null,
       colorScheme: null,
-      colorReverse: null
-    }, 
-    'excluded': {
-      title: 'Filter Exclusion', 
-      legendTitle: 'Filter Exclusion', 
-      fillValue: vg.sql`'Included in Selection'`, 
-      colorScale: 'ordinal', 
+      colorReverse: null,
+    },
+    excluded: {
+      title: 'Filter Exclusion',
+      legendTitle: 'Filter Exclusion',
+      fillValue: vg.sql`'Included in Selection'`,
+      colorScale: 'ordinal',
       colorRange: [transparentGray, transparentRed],
       colorDomain: ['Included in Selection', 'Excluded by Selection'],
       colorScheme: null,
-      colorReverse: null
+      colorReverse: null,
     },
   };
 
-  return(umapCategories);
-}
+  return umapCategories;
+};
 
 export const bootstrapSelectStyles = {
   control: (provided: any, state: any) => ({
@@ -229,16 +253,18 @@ export const bootstrapSelectStyles = {
     fontSize: '0.875rem',
     borderColor: state.isFocused ? '#86b7fe' : '#dee2e6',
     borderRadius: '0.25rem',
-    boxShadow: state.isFocused ? '0 0 0 0.25rem rgba(13, 110, 253, 0.25)' : 'none',
+    boxShadow: state.isFocused
+      ? '0 0 0 0.25rem rgba(13, 110, 253, 0.25)'
+      : 'none',
     '&:hover': {
-      borderColor: state.isFocused ? '#86b7fe' : '#dee2e6'
-    }
+      borderColor: state.isFocused ? '#86b7fe' : '#dee2e6',
+    },
   }),
   valueContainer: (provided: any) => ({
     ...provided,
     minHeight: '29px', // Keep minimum height
     padding: '2px 6px', // Reduce padding
-    flexWrap: 'wrap' // Ensure proper wrapping
+    flexWrap: 'wrap', // Ensure proper wrapping
   }),
   multiValue: (provided: any) => ({
     ...provided,
@@ -248,15 +274,15 @@ export const bootstrapSelectStyles = {
   multiValueLabel: (provided: any) => ({
     ...provided,
     padding: '2px 6px', // Smaller padding inside tags
-    fontSize: '0.75rem'
+    fontSize: '0.75rem',
   }),
   multiValueRemove: (provided: any) => ({
     ...provided,
     padding: '2px',
     ':hover': {
       backgroundColor: '#dc3545',
-      color: 'white'
-    }
+      color: 'white',
+    },
   }),
   input: (provided: any) => ({
     ...provided,
@@ -271,7 +297,7 @@ export const bootstrapSelectStyles = {
   }),
   clearIndicator: (provided: any) => ({
     ...provided,
-    padding: '4px'
+    padding: '4px',
   }),
   dropdownIndicator: (provided: any) => ({
     ...provided,
@@ -283,20 +309,20 @@ export const bootstrapSelectStyles = {
     width: '16px',
     height: '16px',
     '& svg': {
-      display: 'none' // Hide react-select's default arrow
-    }
+      display: 'none', // Hide react-select's default arrow
+    },
   }),
   menu: (provided: any) => ({
     ...provided,
     fontSize: '0.875rem',
     fontFamily: 'Nunito',
-    fontWeight: 400 ,
+    fontWeight: 400,
     fontStyle: 'normal',
-    zIndex: 999
+    zIndex: 999,
   }),
   option: (provided: any) => ({
     ...provided,
     fontSize: '0.875rem',
-    padding: '0.25rem 0.5rem'
-  })
+    padding: '0.25rem 0.5rem',
+  }),
 };
