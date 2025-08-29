@@ -147,10 +147,10 @@ export const createUmapCategories = (
     'genes': {
       title: 'Gene Coexpression', 
       legendTitle: geneComparisonMode === 'addition' 
-      ? `${gene} or ${isGene2Array ? `${gene2.slice(0, 2).join(' or ')}${gene2.length > 2 ? ' or ...' : ''}` : gene2}`
+      ? `Total Expression`
       : geneComparisonMode === 'geometric' 
-        ? `${gene} and ${isGene2Array ? `${gene2.slice(0, 2).join(' and ')}${gene2.length > 2 ? ' and ...' : ''}` : gene2}`
-        : `${gene} vs. ${isGene2Array ? `[${gene2.slice(0, 2).join(', ')}${gene2.length > 2 ? ', ...' : ''}]` : gene2}`, 
+        ? `Mean Expression`
+        : `Log Fold Change`, 
       fillValue: (() => {
         if (isGene2Array) {
           switch(geneComparisonMode) {
